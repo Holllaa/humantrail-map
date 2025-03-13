@@ -3,7 +3,7 @@ import React, { useEffect, useState } from 'react';
 import { useAnalytics } from '@/context/AnalyticsContext';
 import { toast } from 'sonner';
 import { Download, RefreshCw, Share2 } from 'lucide-react';
-import { generateDemoData } from '@/utils/tracking';
+import { generateDemoData, generateHeatmapFromTracks } from '@/utils/tracking';
 
 const TrackingModel: React.FC = () => {
   const {
@@ -53,6 +53,15 @@ const TrackingModel: React.FC = () => {
       for (let i = 0; i < demoTracks.length; i++) {
         currentTracks.push(demoTracks[i]);
         setTracks([...currentTracks]);
+        
+        // Generate and update heatmap with each new track
+        const heatmapData = generateHeatmapFromTracks(
+          currentTracks,
+          storeLayout.width,
+          storeLayout.height
+        );
+        setHeatmapData(heatmapData);
+        
         await new Promise(resolve => setTimeout(resolve, 100));
       }
       
