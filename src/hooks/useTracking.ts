@@ -1,181 +1,135 @@
-import { useEffect, useState, useRef, useCallback } from 'react';
-import { useAnalytics, PathPoint } from '@/context/AnalyticsContext';
-import { toast } from 'sonner';
 
-interface TrackingOptions {
-  onModelLoaded?: () => void;
-  onError?: (error: Error) => void;
-}
+import { useCallback, useEffect, useRef, useState } from 'react';
+import { useAnalytics, PathPoint, PersonTrack } from '@/context/AnalyticsContext';
+import { generateHeatmapFromTracks } from '@/utils/tracking';
 
-// This hook is responsible for loading the model and performing tracking
-export const useTracking = (options?: TrackingOptions) => {
-  const {
-    setTracks,
-    addTrackPoint,
-    setIsProcessing,
-    setIsModelLoaded,
-    setProcessingProgress,
-    videoSrc,
+const useTracking = () => {
+  const { 
+    tracks, 
+    setTracks, 
+    addTrackPoint, 
+    setHeatmapData, 
+    videoSrc, 
+    isProcessing, 
+    setIsProcessing, 
+    setProcessingProgress 
   } = useAnalytics();
   
+  const [currentFrame, setCurrentFrame] = useState<ImageData | null>(null);
+  const frameRef = useRef<HTMLCanvasElement | null>(null);
   const videoRef = useRef<HTMLVideoElement | null>(null);
-  const canvasRef = useRef<HTMLCanvasElement | null>(null);
-  const [modelStatus, setModelStatus] = useState<'idle' | 'loading' | 'ready' | 'error'>('idle');
+  const requestIdRef = useRef<number | null>(null);
   
-  // We'll simulate model loading and tracking for demo purposes
-  // In a real implementation, this would use TensorFlow.js or similar
-  const loadModel = useCallback(async () => {
-    try {
-      setModelStatus('loading');
-      setIsModelLoaded(false);
-      
-      // Simulate model loading time
-      await new Promise(resolve => setTimeout(resolve, 2000));
-      
-      setModelStatus('ready');
-      setIsModelLoaded(true);
-      options?.onModelLoaded?.();
-      toast.success('Tracking model loaded successfully');
-    } catch (error) {
-      console.error('Error loading model:', error);
-      setModelStatus('error');
-      options?.onError?.(error as Error);
-      toast.error('Failed to load tracking model');
-    }
-  }, [setIsModelLoaded, options]);
-  
-  // Process video frames
-  const processFrame = useCallback(() => {
-    if (!videoRef.current || !canvasRef.current || modelStatus !== 'ready') {
-      return;
+  // Initialize tracking
+  const initTracking = useCallback(async (videoElement: HTMLVideoElement) => {
+    if (!videoElement) return;
+    
+    videoRef.current = videoElement;
+    setIsProcessing(true);
+    setProcessingProgress(0);
+    
+    // Reset tracks
+    setTracks([]);
+    
+    // Setup canvas for frame processing
+    if (!frameRef.current) {
+      const canvas = document.createElement('canvas');
+      canvas.width = videoElement.videoWidth;
+      canvas.height = videoElement.videoHeight;
+      frameRef.current = canvas;
     }
     
+    // Start processing video frames
+    processFrame();
+    
+    setIsProcessing(false);
+  }, [setIsProcessing, setProcessingProgress, setTracks]);
+  
+  // Process individual video frame
+  const processFrame = useCallback(() => {
+    if (!videoRef.current || !frameRef.current) return;
+    
     const video = videoRef.current;
-    const canvas = canvasRef.current;
+    const canvas = frameRef.current;
     const ctx = canvas.getContext('2d');
     
     if (!ctx) return;
     
-    // Match canvas size to video
-    canvas.width = video.videoWidth;
-    canvas.height = video.videoHeight;
-    
-    // Draw the current video frame
+    // Draw the current video frame to canvas
     ctx.drawImage(video, 0, 0, canvas.width, canvas.height);
     
-    // In a real implementation, we would now run the frame through our model
-    // For demo purposes, we'll simulate detecting people and tracking
-    simulateDetection(canvas.width, canvas.height);
+    // Get image data for processing
+    const imageData = ctx.getImageData(0, 0, canvas.width, canvas.height);
+    setCurrentFrame(imageData);
     
-  }, [modelStatus]);
+    // Mock detection and tracking
+    mockDetectAndTrack(imageData);
+    
+    // Continue processing frames
+    requestIdRef.current = requestAnimationFrame(processFrame);
+  }, []);
   
-  // Simulate detection for demonstration purposes
-  const simulateDetection = useCallback((width: number, height: number) => {
-    // This is where we would normally run person detection
-    // For demonstration, we'll randomly generate some detections
+  // Mock detection and tracking (to be replaced with real ML model)
+  const mockDetectAndTrack = useCallback((imageData: ImageData) => {
+    // Create random movement patterns for demonstration
     const timestamp = Date.now();
+    const width = imageData.width;
+    const height = imageData.height;
     
-    // Randomly simulate a new person detection
-    if (Math.random() < 0.05) {
-      const personId = `person-${Math.random().toString(36).substring(2, 9)}`;
-      const x = Math.random() * width;
-      const y = Math.random() * height;
-      
-      addTrackPoint(personId, { x, y, timestamp });
-    }
-    
-    // Update existing tracks (simulating movement)
-    setTracks(prevTracks => {
+    // Update existing tracks with new positions
+    setTracks((prevTracks: PersonTrack[]) => {
       return prevTracks.map(track => {
-        if (!track.active || Math.random() > 0.3) return track;
-        
         const lastPoint = track.path[track.path.length - 1];
-        const newX = lastPoint.x + (Math.random() - 0.5) * 20;
-        const newY = lastPoint.y + (Math.random() - 0.5) * 20;
         
-        // Keep within bounds
-        const boundedX = Math.max(0, Math.min(width, newX));
-        const boundedY = Math.max(0, Math.min(height, newY));
+        // Generate next point with some randomness but following a pattern
+        const nextX = Math.max(0, Math.min(width, lastPoint.x + (Math.random() - 0.5) * 20));
+        const nextY = Math.max(0, Math.min(height, lastPoint.y + (Math.random() - 0.5) * 20));
         
+        // Add new point to path
         const newPoint: PathPoint = {
-          x: boundedX,
-          y: boundedY,
-          timestamp,
+          x: nextX,
+          y: nextY,
+          timestamp
         };
         
         return {
           ...track,
-          path: [...track.path, newPoint],
+          path: [...track.path, newPoint]
         };
       });
     });
-  }, [addTrackPoint, setTracks]);
+    
+    // Occasionally add new tracks
+    if (Math.random() < 0.01 && tracks.length < 10) {
+      const newTrackId = `person_${Date.now()}`;
+      const startX = Math.random() * width;
+      const startY = Math.random() * height;
+      
+      addTrackPoint(newTrackId, {
+        x: startX,
+        y: startY,
+        timestamp
+      });
+    }
+    
+    // Generate heatmap data from tracks
+    setHeatmapData(generateHeatmapFromTracks(tracks, width, height));
+  }, [tracks, addTrackPoint, setHeatmapData, setTracks]);
   
-  // Start processing video
-  const startProcessing = useCallback(() => {
-    if (!videoRef.current || modelStatus !== 'ready') {
-      toast.error('Video or model not ready');
-      return;
-    }
-    
-    setIsProcessing(true);
-    
-    const video = videoRef.current;
-    
-    // Ensure video is ready for processing
-    if (video.readyState < 3) { // HAVE_FUTURE_DATA or higher
-      video.addEventListener('canplay', () => {
-        video.play().catch(console.error);
-      }, { once: true });
-    } else {
-      video.play().catch(console.error);
-    }
-    
-    // Start processing frames
-    const processInterval = setInterval(() => {
-      if (video.paused || video.ended) {
-        clearInterval(processInterval);
-        setIsProcessing(false);
-        toast.success('Processing completed');
-        return;
+  // Cleanup
+  useEffect(() => {
+    return () => {
+      if (requestIdRef.current) {
+        cancelAnimationFrame(requestIdRef.current);
       }
-      
-      processFrame();
-      
-      // Update progress
-      const progress = (video.currentTime / video.duration) * 100;
-      setProcessingProgress(Math.min(100, progress));
-    }, 100); // Process 10 frames per second
-    
-    return () => {
-      clearInterval(processInterval);
     };
-  }, [modelStatus, processFrame, setIsProcessing, setProcessingProgress]);
+  }, []);
   
-  // Load the model when the component mounts
-  useEffect(() => {
-    loadModel();
-    
-    return () => {
-      // Clean up resources
-      setModelStatus('idle');
-    };
-  }, [loadModel]);
-  
-  // Update video source when it changes
-  useEffect(() => {
-    if (videoRef.current && videoSrc) {
-      videoRef.current.src = videoSrc;
-      videoRef.current.load();
-    }
-  }, [videoSrc]);
-  
-  // Return the refs and functions to be used by the component
   return {
+    currentFrame,
+    initTracking,
     videoRef,
-    canvasRef,
-    modelStatus,
-    startProcessing,
-    loadModel,
   };
 };
+
+export default useTracking;
