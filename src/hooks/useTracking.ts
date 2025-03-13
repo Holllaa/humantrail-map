@@ -3,7 +3,12 @@ import { useCallback, useEffect, useRef, useState } from 'react';
 import { useAnalytics, PathPoint, PersonTrack } from '@/context/AnalyticsContext';
 import { generateHeatmapFromTracks } from '@/utils/tracking';
 
-const useTracking = () => {
+interface UseTrackingOptions {
+  onModelLoaded?: () => void;
+  onError?: (error: Error) => void;
+}
+
+const useTracking = (options?: UseTrackingOptions) => {
   const { 
     tracks, 
     setTracks, 
@@ -17,6 +22,7 @@ const useTracking = () => {
   
   const [currentFrame, setCurrentFrame] = useState<ImageData | null>(null);
   const frameRef = useRef<HTMLCanvasElement | null>(null);
+  const canvasRef = useRef<HTMLCanvasElement | null>(null);
   const videoRef = useRef<HTMLVideoElement | null>(null);
   const requestIdRef = useRef<number | null>(null);
   
@@ -42,8 +48,13 @@ const useTracking = () => {
     // Start processing video frames
     processFrame();
     
+    // Simulate model loading
+    setTimeout(() => {
+      options?.onModelLoaded?.();
+    }, 1500);
+    
     setIsProcessing(false);
-  }, [setIsProcessing, setProcessingProgress, setTracks]);
+  }, [setIsProcessing, setProcessingProgress, setTracks, options]);
   
   // Process individual video frame
   const processFrame = useCallback(() => {
@@ -118,6 +129,19 @@ const useTracking = () => {
     setHeatmapData(generateHeatmapFromTracks(tracks, width, height));
   }, [tracks, addTrackPoint, setHeatmapData, setTracks]);
   
+  // Start processing method for external components
+  const startProcessing = useCallback(() => {
+    if (!videoRef.current) {
+      console.error("Video element not initialized");
+      options?.onError?.(new Error("Video element not initialized"));
+      return;
+    }
+    
+    setIsProcessing(true);
+    videoRef.current.play();
+    processFrame();
+  }, [processFrame, setIsProcessing, options]);
+  
   // Cleanup
   useEffect(() => {
     return () => {
@@ -131,6 +155,8 @@ const useTracking = () => {
     currentFrame,
     initTracking,
     videoRef,
+    canvasRef,
+    startProcessing
   };
 };
 

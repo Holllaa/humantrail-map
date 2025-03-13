@@ -51,18 +51,26 @@ const HeatmapView: React.FC = () => {
       
       {/* Legend */}
       <div className="absolute bottom-4 right-4 bg-white/90 dark:bg-gray-800/90 backdrop-blur-md rounded-lg p-3 z-30 shadow-subtle border border-gray-100 dark:border-gray-700 flex flex-col space-y-2">
-        <p className="text-xs font-medium text-gray-600 dark:text-gray-300">Foot Traffic</p>
+        <p className="text-xs font-medium text-gray-600 dark:text-gray-300">Foot Traffic Density</p>
         <div className="flex items-center space-x-2">
-          <div className="w-4 h-4 rounded-full bg-heatmap-low" />
+          <div className="w-4 h-4 rounded-full bg-heatmap-low/20" />
+          <span className="text-xs text-gray-700 dark:text-gray-300">Very Low</span>
+        </div>
+        <div className="flex items-center space-x-2">
+          <div className="w-4 h-4 rounded-full bg-heatmap-low/40" />
           <span className="text-xs text-gray-700 dark:text-gray-300">Low</span>
         </div>
         <div className="flex items-center space-x-2">
-          <div className="w-4 h-4 rounded-full bg-heatmap-medium" />
+          <div className="w-4 h-4 rounded-full bg-heatmap-medium/50" />
           <span className="text-xs text-gray-700 dark:text-gray-300">Medium</span>
         </div>
         <div className="flex items-center space-x-2">
-          <div className="w-4 h-4 rounded-full bg-heatmap-high" />
+          <div className="w-4 h-4 rounded-full bg-heatmap-orange/60" />
           <span className="text-xs text-gray-700 dark:text-gray-300">High</span>
+        </div>
+        <div className="flex items-center space-x-2">
+          <div className="w-4 h-4 rounded-full bg-heatmap-high/70" />
+          <span className="text-xs text-gray-700 dark:text-gray-300">Very High</span>
         </div>
       </div>
     </div>

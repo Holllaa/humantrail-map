@@ -76,9 +76,10 @@ export default {
 					gray: '#8E8E93',
 				},
 				heatmap: {
-					low: '#5AC8FA',
-					medium: '#FFD60A',
-					high: '#FF453A',
+					low: '#5AC8FA',    // blue
+					medium: '#FFD60A',  // yellow
+					orange: '#FF9F0A',  // orange
+					high: '#FF453A',    // red
 				}
 			},
 			borderRadius: {

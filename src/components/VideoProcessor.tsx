@@ -1,5 +1,5 @@
 
-import React, { useCallback, useState } from 'react';
+import React, { useCallback, useState, useEffect } from 'react';
 import useTracking from '@/hooks/useTracking';
 import { useAnalytics } from '@/context/AnalyticsContext';
 import { toast } from 'sonner';
@@ -13,7 +13,8 @@ const VideoProcessor: React.FC = () => {
     setHeatmapData, 
     storeLayout, 
     isProcessing, 
-    setIsProcessing 
+    setIsProcessing,
+    tracks
   } = useAnalytics();
   
   const [isPaused, setIsPaused] = useState(false);
@@ -47,15 +48,14 @@ const VideoProcessor: React.FC = () => {
   
   // Generate heatmap from current tracking data
   const generateHeatmap = useCallback(() => {
-    const { tracks } = useAnalytics();
     const heatmapData = generateHeatmapFromTracks(
       tracks,
       storeLayout.width,
       storeLayout.height
     );
     setHeatmapData(heatmapData);
-    toast.success('Heatmap generated from current data');
-  }, [storeLayout.width, storeLayout.height, setHeatmapData]);
+    toast.success('Heatmap generated with multi-color density visualization');
+  }, [tracks, storeLayout.width, storeLayout.height, setHeatmapData]);
   
   return (
     <div className="w-full space-y-4 animate-fade-up">

@@ -1,3 +1,4 @@
+
 @tailwind base;
 @tailwind components;
 @tailwind utilities;
@@ -134,16 +135,25 @@
     @apply absolute rounded-full bg-retail-blue/30 animate-ripple;
   }
 
-  .heatmap-low {
+  /* Heatmap gradient classes */
+  .heatmap-lowest {
     @apply bg-heatmap-low/20;
   }
   
+  .heatmap-low {
+    @apply bg-heatmap-low/40;
+  }
+  
   .heatmap-medium {
-    @apply bg-heatmap-medium/40;
+    @apply bg-heatmap-medium/50;
   }
   
   .heatmap-high {
-    @apply bg-heatmap-high/60;
+    @apply bg-heatmap-orange/60;
+  }
+  
+  .heatmap-highest {
+    @apply bg-heatmap-high/70;
   }
 }
 
