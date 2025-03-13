@@ -78,7 +78,7 @@ const useTracking = () => {
     
     // Update existing tracks with new positions
     setTracks((prevTracks: PersonTrack[]) => {
-      return prevTracks.map(track => {
+      const updatedTracks = prevTracks.map(track => {
         const lastPoint = track.path[track.path.length - 1];
         
         // Generate next point with some randomness but following a pattern
@@ -97,6 +97,8 @@ const useTracking = () => {
           path: [...track.path, newPoint]
         };
       });
+      
+      return updatedTracks;
     });
     
     // Occasionally add new tracks

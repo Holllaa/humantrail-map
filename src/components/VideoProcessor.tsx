@@ -1,6 +1,6 @@
 
 import React, { useCallback, useState } from 'react';
-import { useTracking } from '@/hooks/useTracking';
+import useTracking from '@/hooks/useTracking';
 import { useAnalytics } from '@/context/AnalyticsContext';
 import { toast } from 'sonner';
 import { Play, Pause, RefreshCw, RotateCcw } from 'lucide-react';
