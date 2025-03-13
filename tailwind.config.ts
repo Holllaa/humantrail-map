@@ -1,3 +1,4 @@
+
 import type { Config } from "tailwindcss";
 
 export default {
@@ -61,6 +62,23 @@ export default {
 					'accent-foreground': 'hsl(var(--sidebar-accent-foreground))',
 					border: 'hsl(var(--sidebar-border))',
 					ring: 'hsl(var(--sidebar-ring))'
+				},
+				retail: {
+					blue: '#0A84FF',
+					indigo: '#5E5CE6',
+					teal: '#5AC8FA',
+					green: '#30D158',
+					yellow: '#FFD60A',
+					orange: '#FF9F0A',
+					red: '#FF453A',
+					pink: '#FF375F',
+					purple: '#BF5AF2',
+					gray: '#8E8E93',
+				},
+				heatmap: {
+					low: '#5AC8FA',
+					medium: '#FFD60A',
+					high: '#FF453A',
 				}
 			},
 			borderRadius: {
@@ -68,28 +86,68 @@ export default {
 				md: 'calc(var(--radius) - 2px)',
 				sm: 'calc(var(--radius) - 4px)'
 			},
+			fontFamily: {
+				sans: ['SF Pro Display', 'system-ui', 'sans-serif'],
+				mono: ['SF Mono', 'monospace'],
+			},
+			boxShadow: {
+				'glass': '0 8px 32px 0 rgba(31, 38, 135, 0.07)',
+				'subtle': '0 2px 10px rgba(0, 0, 0, 0.05)',
+				'hover': '0 10px 40px -10px rgba(0, 0, 0, 0.1)',
+			},
 			keyframes: {
 				'accordion-down': {
-					from: {
-						height: '0'
-					},
-					to: {
-						height: 'var(--radix-accordion-content-height)'
-					}
+					from: { height: '0' },
+					to: { height: 'var(--radix-accordion-content-height)' },
 				},
 				'accordion-up': {
-					from: {
-						height: 'var(--radix-accordion-content-height)'
-					},
-					to: {
-						height: '0'
-					}
-				}
+					from: { height: 'var(--radix-accordion-content-height)' },
+					to: { height: '0' },
+				},
+				'fade-in': {
+					from: { opacity: '0' },
+					to: { opacity: '1' },
+				},
+				'fade-up': {
+					from: { opacity: '0', transform: 'translateY(10px)' },
+					to: { opacity: '1', transform: 'translateY(0)' },
+				},
+				'pulse-subtle': {
+					'0%, 100%': { opacity: '1' },
+					'50%': { opacity: '0.7' },
+				},
+				'float': {
+					'0%, 100%': { transform: 'translateY(0)' },
+					'50%': { transform: 'translateY(-10px)' },
+				},
+				'trail': {
+					from: { strokeDashoffset: '1000' },
+					to: { strokeDashoffset: '0' },
+				},
+				'ripple': {
+					'0%': { transform: 'scale(0)', opacity: '1' },
+					'100%': { transform: 'scale(1)', opacity: '0' },
+				},
+				'blur-in': {
+					from: { filter: 'blur(5px)', opacity: '0' },
+					to: { filter: 'blur(0)', opacity: '1' },
+				},
 			},
 			animation: {
 				'accordion-down': 'accordion-down 0.2s ease-out',
-				'accordion-up': 'accordion-up 0.2s ease-out'
-			}
+				'accordion-up': 'accordion-up 0.2s ease-out',
+				'fade-in': 'fade-in 0.5s ease-out',
+				'fade-up': 'fade-up 0.5s ease-out',
+				'pulse-subtle': 'pulse-subtle 3s infinite',
+				'float': 'float 5s ease-in-out infinite',
+				'trail': 'trail 1.5s ease-out forwards',
+				'ripple': 'ripple 1s cubic-bezier(0, 0.2, 0.8, 1) forwards',
+				'blur-in': 'blur-in 0.5s ease-out forwards',
+			},
+			backdropFilter: {
+				'none': 'none',
+				'blur': 'blur(20px)',
+			},
 		}
 	},
 	plugins: [require("tailwindcss-animate")],
