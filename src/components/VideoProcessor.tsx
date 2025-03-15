@@ -1,135 +1,221 @@
-
-import React, { useCallback, useState, useEffect } from 'react';
-import useTracking from '@/hooks/useTracking';
+import React, { useEffect, useRef, useState } from 'react';
 import { useAnalytics } from '@/context/AnalyticsContext';
-import { toast } from 'sonner';
-import { Play, Pause, RefreshCw, RotateCcw } from 'lucide-react';
-import UploadZone from './UploadZone';
+import { useTracking } from '@/hooks/useTracking';
 import { generateHeatmapFromTracks } from '@/utils/tracking';
+import { Button } from '@/components/ui/button';
+import { Progress } from '@/components/ui/progress';
+import { toast } from 'sonner';
 
 const VideoProcessor: React.FC = () => {
-  const { 
-    videoSrc, 
-    setHeatmapData, 
-    storeLayout, 
-    isProcessing, 
-    setIsProcessing,
-    tracks
-  } = useAnalytics();
-  
-  const [isPaused, setIsPaused] = useState(false);
-  
-  const { videoRef, canvasRef, startProcessing } = useTracking({
-    onModelLoaded: () => {
-      toast.success('Tracking model ready for processing');
-    },
-    onError: (error) => {
-      toast.error(`Model error: ${error.message}`);
+  const { setVideoSrc, setIsProcessing, setHeatmapData, setTracks, setProcessingProgress, clearAllData } = useAnalytics();
+  const { isModelLoaded, isProcessing, personTracks, startTracking, stopTracking, resetTracking } = useTracking();
+  const videoRef = useRef<HTMLVideoElement>(null);
+  const fileInputRef = useRef<HTMLInputElement>(null);
+  const [videoFile, setVideoFile] = useState<File | null>(null);
+  const [processing, setProcessing] = useState(false);
+
+  // Load video when file is selected
+  useEffect(() => {
+    if (!videoFile) return;
+
+    const videoURL = URL.createObjectURL(videoFile);
+    setVideoSrc(videoURL);
+
+    // Load video metadata to get dimensions
+    const video = videoRef.current;
+    if (video) {
+      video.onloadedmetadata = () => {
+        // Play the video briefly to ensure dimensions are loaded
+        video.play().then(() => {
+          video.pause();
+        }).catch(error => {
+          console.error("Error autoplaying video:", error);
+        });
+      };
     }
-  });
-  
-  // Handle video pause/resume
-  const togglePause = useCallback(() => {
-    if (videoRef.current) {
-      if (videoRef.current.paused) {
-        videoRef.current.play();
-        setIsPaused(false);
-      } else {
-        videoRef.current.pause();
-        setIsPaused(true);
-      }
+  }, [videoFile, setVideoSrc]);
+
+  // Start tracking when processing starts
+  useEffect(() => {
+    if (isProcessing && videoRef.current) {
+      startTracking(videoRef.current);
+    } else if (!isProcessing) {
+      stopTracking();
     }
-  }, [videoRef]);
-  
-  // Start processing the video
-  const handleStartProcessing = useCallback(() => {
-    startProcessing();
-  }, [startProcessing]);
-  
-  // Generate heatmap from current tracking data
-  const generateHeatmap = useCallback(() => {
+  }, [isProcessing, startTracking, stopTracking]);
+
+  // Update analytics context with tracking data
+  useEffect(() => {
+    setTracks(personTracks);
+  }, [personTracks, setTracks]);
+
+  // Generate heatmap data when tracking data changes
+  useEffect(() => {
+    if (personTracks.length === 0) {
+      setHeatmapData([]);
+      return;
+    }
+
+    if (!videoRef.current) return;
+
     const heatmapData = generateHeatmapFromTracks(
-      tracks,
-      storeLayout.width,
-      storeLayout.height
+      personTracks,
+      videoRef.current.videoWidth,
+      videoRef.current.videoHeight
     );
     setHeatmapData(heatmapData);
-    toast.success('Heatmap generated with multi-color density visualization');
-  }, [tracks, storeLayout.width, storeLayout.height, setHeatmapData]);
-  
+  }, [personTracks, setHeatmapData]);
+
+  // Handle video upload
+  const handleVideoUpload = (event: React.ChangeEvent<HTMLInputElement>) => {
+    const file = event.target.files?.[0];
+    if (file) {
+      setVideoFile(file);
+    }
+  };
+
+  // Handle drag and drop
+  const handleDragOver = (event: React.DragEvent<HTMLDivElement>) => {
+    event.preventDefault();
+  };
+
+  const handleDrop = (event: React.DragEvent<HTMLDivElement>) => {
+    event.preventDefault();
+    const file = event.dataTransfer.files?.[0];
+    if (file && file.type.startsWith('video/')) {
+      setVideoFile(file);
+    }
+  };
+
+  // Start processing
+  const handleProcessVideo = async () => {
+    if (!videoFile) {
+      toast.error('Please upload a video first');
+      return;
+    }
+
+    if (!isModelLoaded) {
+      toast.error('Tracking model is still loading. Please wait.');
+      return;
+    }
+
+    setIsProcessing(true);
+    setProcessing(true);
+    setProcessingProgress(0);
+    resetTracking();
+    toast.loading('Starting video processing...', { id: 'processing' });
+
+    // Simulate processing progress
+    let progress = 0;
+    const interval = setInterval(() => {
+      progress += 10;
+      setProcessingProgress(progress);
+
+      if (progress >= 100) {
+        clearInterval(interval);
+        setIsProcessing(false);
+        setProcessing(false);
+        toast.success('Video processing complete!', { id: 'processing' });
+      }
+    }, 500);
+  };
+
+  // Stop processing
+  const handleStopProcessing = () => {
+    setIsProcessing(false);
+    setProcessing(false);
+    toast.success('Video processing stopped.', { id: 'processing' });
+  };
+
+  // Clear all data
+  const handleClearData = () => {
+    clearAllData();
+    setVideoFile(null);
+    resetTracking();
+    toast.info('All data cleared.');
+  };
+
   return (
-    <div className="w-full space-y-4 animate-fade-up">
-      {!videoSrc ? (
-        // Video upload zone
-        <UploadZone type="video" />
+    <div className="w-full space-y-4">
+      <h3 className="text-lg font-medium">Video Processing</h3>
+
+      {/* Video Upload Zone */}
+      {!videoFile ? (
+        <div
+          id="upload-zone"
+          className="upload-zone"
+          onDragOver={handleDragOver}
+          onDrop={handleDrop}
+        >
+          <label htmlFor="video-input">
+            <div className="upload-content">
+              <svg width="50" height="50" viewBox="0 0 24 24" fill="none" stroke="currentColor" strokeWidth="2">
+                <path d="M21 15v4a2 2 0 0 1-2 2H5a2 2 0 0 1-2-2v-4"></path>
+                <polyline points="17 8 12 3 7 8"></polyline>
+                <line x1="12" y1="3" x2="12" y2="15"></line>
+              </svg>
+              <p>Drag & drop video or click to browse</p>
+            </div>
+            <input
+              type="file"
+              id="video-input"
+              accept="video/*"
+              hidden
+              onChange={handleVideoUpload}
+              ref={fileInputRef}
+            />
+          </label>
+        </div>
       ) : (
-        // Video player with controls
         <div className="glass-panel p-4 space-y-4">
-          <div className="relative aspect-video w-full overflow-hidden rounded-lg bg-black">
-            <video 
+          <h4 className="text-md font-medium">Uploaded Video</h4>
+          <div className="relative aspect-video w-full overflow-hidden rounded-lg bg-gray-100 dark:bg-gray-800">
+            <video
               ref={videoRef}
+              src={URL.createObjectURL(videoFile)}
+              controls
               className="absolute inset-0 w-full h-full object-contain"
-              controls={false}
             />
-            <canvas 
-              ref={canvasRef}
-              className="absolute inset-0 w-full h-full object-contain pointer-events-none"
-            />
-            
-            {/* Processing overlay */}
-            {isProcessing && (
-              <div className="absolute top-2 left-2 bg-black/70 text-white px-2 py-1 rounded text-xs font-medium">
-                Processing...
-              </div>
-            )}
           </div>
-          
-          <div className="flex flex-wrap gap-2 justify-between">
-            <div className="flex flex-wrap gap-2">
-              <button
-                onClick={togglePause}
-                className="px-3 py-2 bg-retail-blue text-white rounded-lg flex items-center space-x-1 hover:bg-retail-blue/90 transition-colors"
-                disabled={!isProcessing}
-              >
-                {isPaused ? (
-                  <><Play size={16} /> <span>Resume</span></>
-                ) : (
-                  <><Pause size={16} /> <span>Pause</span></>
-                )}
-              </button>
-              
-              <button
-                onClick={handleStartProcessing}
-                className="px-3 py-2 bg-retail-green text-white rounded-lg flex items-center space-x-1 hover:bg-retail-green/90 transition-colors"
-                disabled={isProcessing}
-              >
-                <Play size={16} />
-                <span>Start Processing</span>
-              </button>
-            </div>
-            
-            <div className="flex flex-wrap gap-2">
-              <button
-                onClick={generateHeatmap}
-                className="px-3 py-2 bg-retail-purple text-white rounded-lg flex items-center space-x-1 hover:bg-retail-purple/90 transition-colors"
-              >
-                <RefreshCw size={16} />
-                <span>Generate Heatmap</span>
-              </button>
-              
-              <button
-                onClick={() => {
-                  if (videoRef.current) {
-                    videoRef.current.currentTime = 0;
-                  }
-                }}
-                className="px-3 py-2 bg-gray-200 dark:bg-gray-700 text-gray-700 dark:text-gray-200 rounded-lg flex items-center space-x-1 hover:bg-gray-300 dark:hover:bg-gray-600 transition-colors"
-              >
-                <RotateCcw size={16} />
-                <span>Reset</span>
-              </button>
-            </div>
+          <div className="flex justify-between text-sm text-gray-500">
+            <span>{videoFile.name}</span>
+            <span>{videoFile.size} KB</span>
           </div>
+        </div>
+      )}
+
+      {/* Processing Controls */}
+      <div className="flex justify-between items-center">
+        <div>
+          <Button
+            onClick={handleProcessVideo}
+            disabled={processing || !videoFile || !isModelLoaded}
+          >
+            {processing ? 'Processing...' : 'Process Video'}
+          </Button>
+          {processing && (
+            <Button
+              variant="secondary"
+              onClick={handleStopProcessing}
+              className="ml-2"
+            >
+              Stop Processing
+            </Button>
+          )}
+        </div>
+        <Button
+          variant="destructive"
+          onClick={handleClearData}
+          disabled={processing}
+        >
+          Clear All Data
+        </Button>
+      </div>
+
+      {/* Progress Bar */}
+      {processing && (
+        <div className="w-full">
+          <Progress value={setProcessingProgress} />
         </div>
       )}
     </div>

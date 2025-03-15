@@ -53,66 +53,11 @@ export const drawHeatmap = (
   });
 };
 
-// Generate a color based on heat value - for CSS class assignment
+// Generate color based on heat value - for CSS class assignment
 export const getHeatColor = (value: number): string => {
   if (value < 0.2) return 'heatmap-lowest';
   if (value < 0.4) return 'heatmap-low';
   if (value < 0.6) return 'heatmap-medium';
   if (value < 0.8) return 'heatmap-high';
   return 'heatmap-highest';
-};
-
-// For DOM-based heat visualization (alternative to canvas)
-export const createHeatElements = (
-  container: HTMLElement,
-  data: HeatmapData[],
-  radius: number = 30
-): void => {
-  // Clear existing elements
-  container.innerHTML = '';
-  
-  // Create heat elements
-  data.forEach(point => {
-    const element = document.createElement('div');
-    element.style.position = 'absolute';
-    element.style.left = `${point.x - radius}px`;
-    element.style.top = `${point.y - radius}px`;
-    element.style.width = `${radius * 2}px`;
-    element.style.height = `${radius * 2}px`;
-    element.style.borderRadius = '50%';
-    
-    // Add appropriate class based on heat value
-    element.classList.add(getHeatColor(point.value));
-    
-    container.appendChild(element);
-  });
-};
-
-// Alternative approach using CSS variables for dynamic sizing
-export const drawHeatmapWithCSS = (
-  container: HTMLElement,
-  data: HeatmapData[],
-  maxRadius: number = 50
-): void => {
-  // Clear existing elements
-  container.innerHTML = '';
-  
-  // Create heat elements
-  data.forEach(point => {
-    const element = document.createElement('div');
-    const radius = Math.max(10, maxRadius * point.value);
-    
-    element.style.position = 'absolute';
-    element.style.left = `${point.x - radius}px`;
-    element.style.top = `${point.y - radius}px`;
-    element.style.width = `${radius * 2}px`;
-    element.style.height = `${radius * 2}px`;
-    element.style.borderRadius = '50%';
-    element.style.transform = 'translate(-50%, -50%)';
-    
-    // Add appropriate class based on heat value
-    element.classList.add(getHeatColor(point.value));
-    
-    container.appendChild(element);
-  });
 };
