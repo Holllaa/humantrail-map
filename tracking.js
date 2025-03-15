@@ -1,94 +1,278 @@
+
 /**
- * Tracking utilities for monitoring customer movement
+ * Human Tracking Functionality
+ * Uses TensorFlow.js and COCO-SSD model for person detection
  */
 
-// Generate random demonstration data for development purposes
-function generateDemoData(width, height, numPeople = 10, pointsPerPerson = 100) {
-  const tracks = [];
+// Global variables for tracking
+let model = null;
+let isModelLoading = false;
+let isModelLoaded = false;
+let personTrackingData = []; // Stores all tracked persons data
+let trackingIntervalId = null;
+let lastProcessedTime = 0;
+const PROCESS_INTERVAL = 100; // Process frames every 100ms
+const PERSON_DETECTION_THRESHOLD = 0.6; // Confidence threshold
+
+// Load COCO-SSD model
+async function loadTrackingModel() {
+  if (isModelLoading || isModelLoaded) return;
   
-  for (let i = 0; i < numPeople; i++) {
-    const id = `person-${i}`;
-    const path = [];
+  isModelLoading = true;
+  showModelLoadingIndicator(true);
+  
+  try {
+    model = await cocoSsd.load();
+    isModelLoaded = true;
+    console.log("Person detection model loaded");
     
-    // Starting point (usually from entrance)
-    const startX = Math.random() < 0.7 ? 0 : width * Math.random();
-    const startY = startX === 0 ? height * Math.random() : 0;
-    let x = startX;
-    let y = startY;
+    // Enable processing button
+    document.getElementById('process-button').disabled = false;
+  } catch (error) {
+    console.error("Error loading model:", error);
+    alert("Failed to load person detection model. Please try again.");
+  } finally {
+    isModelLoading = false;
+    showModelLoadingIndicator(false);
+  }
+}
+
+// Process video frames to detect and track persons
+async function processVideoFrame(videoElement, canvasElement) {
+  if (!model || !videoElement || !canvasElement) return;
+  
+  const ctx = canvasElement.getContext('2d');
+  const now = performance.now();
+  
+  // Only process frames at specified interval
+  if (now - lastProcessedTime < PROCESS_INTERVAL) return;
+  lastProcessedTime = now;
+  
+  // Make predictions with model
+  try {
+    const predictions = await model.detect(videoElement);
     
-    const now = Date.now();
+    // Clear canvas
+    ctx.clearRect(0, 0, canvasElement.width, canvasElement.height);
     
-    for (let j = 0; j < pointsPerPerson; j++) {
-      // Add some "attraction points" to make movement more realistic
-      const targetX = j % 20 === 0 ? width * Math.random() : x;
-      const targetY = j % 20 === 0 ? height * Math.random() : y;
+    // Filter for person detections with good confidence
+    const persons = predictions.filter(prediction => 
+      prediction.class === 'person' && 
+      prediction.score >= PERSON_DETECTION_THRESHOLD
+    );
+    
+    // Track persons across frames
+    trackPersons(persons, now, videoElement.videoWidth, videoElement.videoHeight);
+    
+    // Draw tracking results
+    drawTrackingResults(ctx, canvasElement.width, canvasElement.height);
+    
+  } catch (error) {
+    console.error("Error processing video frame:", error);
+  }
+}
+
+// Track persons across frames
+function trackPersons(detectedPersons, timestamp, videoWidth, videoHeight) {
+  // If this is the first set of detections, initialize tracks
+  if (personTrackingData.length === 0) {
+    detectedPersons.forEach((person, index) => {
+      const bbox = person.bbox;
+      const centerX = bbox[0] + bbox[2]/2;
+      const centerY = bbox[1] + bbox[3]/2;
       
-      // Move toward target with some randomness
-      x += (targetX - x) * 0.1 + (Math.random() - 0.5) * 10;
-      y += (targetY - y) * 0.1 + (Math.random() - 0.5) * 10;
+      personTrackingData.push({
+        id: `person_${index}`,
+        path: [{
+          x: centerX / videoWidth,  // Save as ratio for scalability
+          y: centerY / videoHeight,
+          timestamp: timestamp
+        }],
+        lastSeen: timestamp,
+        bbox: bbox,
+        active: true
+      });
+    });
+    return;
+  }
+  
+  // Match new detections with existing tracks
+  const assignedTracks = new Set();
+  
+  // For each detected person, find the closest track
+  detectedPersons.forEach(person => {
+    const bbox = person.bbox;
+    const centerX = bbox[0] + bbox[2]/2;
+    const centerY = bbox[1] + bbox[3]/2;
+    
+    let closestTrackIndex = -1;
+    let closestDistance = Infinity;
+    
+    // Find closest track
+    personTrackingData.forEach((track, index) => {
+      if (!track.active) return;
       
-      // Keep within bounds
-      x = Math.max(0, Math.min(width, x));
-      y = Math.max(0, Math.min(height, y));
+      const lastPoint = track.path[track.path.length - 1];
+      const trackX = lastPoint.x * videoWidth;
+      const trackY = lastPoint.y * videoHeight;
       
-      path.push({
-        x,
-        y,
-        timestamp: now + j * 1000, // One point per second
+      const distance = Math.sqrt(
+        Math.pow(centerX - trackX, 2) + 
+        Math.pow(centerY - trackY, 2)
+      );
+      
+      // If distance is within threshold, consider it the same person
+      if (distance < 100 && distance < closestDistance) {
+        closestDistance = distance;
+        closestTrackIndex = index;
+      }
+    });
+    
+    // Update existing track or create new one
+    if (closestTrackIndex >= 0 && !assignedTracks.has(closestTrackIndex)) {
+      // Update existing track
+      const track = personTrackingData[closestTrackIndex];
+      track.path.push({
+        x: centerX / videoWidth,
+        y: centerY / videoHeight,
+        timestamp: timestamp
+      });
+      track.lastSeen = timestamp;
+      track.bbox = bbox;
+      assignedTracks.add(closestTrackIndex);
+    } else {
+      // Create new track
+      personTrackingData.push({
+        id: `person_${personTrackingData.length}`,
+        path: [{
+          x: centerX / videoWidth,
+          y: centerY / videoHeight,
+          timestamp: timestamp
+        }],
+        lastSeen: timestamp,
+        bbox: bbox,
+        active: true
       });
     }
-    
-    tracks.push({
-      id,
-      path,
-      active: Math.random() > 0.3, // Some tracks are inactive
-    });
-  }
+  });
   
-  return tracks;
+  // Mark tracks as inactive if not detected for a while
+  personTrackingData.forEach(track => {
+    if (timestamp - track.lastSeen > 2000) {
+      track.active = false;
+    }
+  });
 }
 
-// Smooth a path by removing noise and jitter
-function smoothPath(path, windowSize = 5) {
-  if (path.length <= windowSize) {
-    return path;
-  }
-
-  const smoothedPath = [];
-  
-  // Keep first point
-  smoothedPath.push(path[0]);
-  
-  // Smooth middle points
-  for (let i = windowSize; i < path.length - windowSize; i++) {
-    let sumX = 0;
-    let sumY = 0;
-    
-    for (let j = i - windowSize; j <= i + windowSize; j++) {
-      sumX += path[j].x;
-      sumY += path[j].y;
+// Draw tracking results on canvas
+function drawTrackingResults(ctx, canvasWidth, canvasHeight) {
+  personTrackingData.forEach(track => {
+    // Draw person bounding box if active
+    if (track.active && track.bbox) {
+      const [x, y, width, height] = track.bbox;
+      const scaledX = (x / track.path[0].x) * canvasWidth;
+      const scaledY = (y / track.path[0].y) * canvasHeight;
+      const scaledWidth = (width / track.path[0].x) * canvasWidth;
+      const scaledHeight = (height / track.path[0].y) * canvasHeight;
+      
+      ctx.strokeStyle = '#34c759';
+      ctx.lineWidth = 2;
+      ctx.strokeRect(scaledX, scaledY, scaledWidth, scaledHeight);
+      
+      // Draw ID label
+      ctx.fillStyle = '#34c759';
+      ctx.fillRect(scaledX, scaledY - 20, 60, 20);
+      ctx.fillStyle = 'white';
+      ctx.font = '12px Arial';
+      ctx.fillText(track.id, scaledX + 5, scaledY - 5);
     }
     
-    smoothedPath.push({
-      x: sumX / (windowSize * 2 + 1),
-      y: sumY / (windowSize * 2 + 1),
-      timestamp: path[i].timestamp,
-    });
-  }
-  
-  // Keep last point
-  smoothedPath.push(path[path.length - 1]);
-  
-  return smoothedPath;
+    // Draw movement trail
+    if (track.path.length > 1) {
+      ctx.beginPath();
+      
+      // Move to first point
+      const firstPoint = track.path[0];
+      ctx.moveTo(firstPoint.x * canvasWidth, firstPoint.y * canvasHeight);
+      
+      // Create line to each subsequent point
+      for (let i = 1; i < track.path.length; i++) {
+        const point = track.path[i];
+        ctx.lineTo(point.x * canvasWidth, point.y * canvasHeight);
+      }
+      
+      // Style and stroke the path
+      ctx.strokeStyle = track.active ? '#34c759' : '#8e8e93';
+      ctx.lineWidth = 2;
+      ctx.stroke();
+      
+      // Draw current position
+      const lastPoint = track.path[track.path.length - 1];
+      ctx.fillStyle = track.active ? '#34c759' : '#8e8e93';
+      ctx.beginPath();
+      ctx.arc(
+        lastPoint.x * canvasWidth, 
+        lastPoint.y * canvasHeight, 
+        5, 0, Math.PI * 2
+      );
+      ctx.fill();
+    }
+  });
 }
 
-// Calculate analytics from tracks
-function calculateAnalytics(tracks) {
-  const totalVisitors = tracks.length;
+// Start continuous tracking
+function startTracking(videoElement, canvasElement) {
+  if (trackingIntervalId) return;
+  
+  // Make sure canvas dimensions match video
+  canvasElement.width = videoElement.videoWidth;
+  canvasElement.height = videoElement.videoHeight;
+  
+  // Process frames continuously while video is playing
+  trackingIntervalId = requestAnimationFrame(function processFrame() {
+    if (!videoElement.paused && !videoElement.ended) {
+      processVideoFrame(videoElement, canvasElement);
+    }
+    trackingIntervalId = requestAnimationFrame(processFrame);
+  });
+}
+
+// Stop tracking
+function stopTracking() {
+  if (trackingIntervalId) {
+    cancelAnimationFrame(trackingIntervalId);
+    trackingIntervalId = null;
+  }
+}
+
+// Reset tracking data
+function resetTracking() {
+  personTrackingData = [];
+  lastProcessedTime = 0;
+}
+
+// Helper to show model loading indicator
+function showModelLoadingIndicator(isLoading) {
+  // Check if loading indicator exists, create if not
+  let loadingIndicator = document.querySelector('.loading-model');
+  if (!loadingIndicator) {
+    loadingIndicator = document.createElement('div');
+    loadingIndicator.className = 'loading-model';
+    loadingIndicator.textContent = 'Loading person detection model...';
+    document.querySelector('.video-container').appendChild(loadingIndicator);
+  }
+  
+  // Show or hide
+  loadingIndicator.classList.toggle('active', isLoading);
+}
+
+// Calculate analytics data from tracking results
+function calculateAnalytics() {
+  const totalVisitors = personTrackingData.length;
   
   // Calculate average time spent (in ms)
   let totalTime = 0;
-  tracks.forEach(track => {
+  personTrackingData.forEach(track => {
     if (track.path.length >= 2) {
       const startTime = track.path[0].timestamp;
       const endTime = track.path[track.path.length - 1].timestamp;
@@ -98,68 +282,101 @@ function calculateAnalytics(tracks) {
   const averageTimeMs = totalVisitors > 0 ? totalTime / totalVisitors : 0;
   const averageTimeSeconds = Math.round(averageTimeMs / 1000);
   
-  // Calculate total distance walked (in pixels)
-  let totalDistance = 0;
-  tracks.forEach(track => {
-    for (let i = 1; i < track.path.length; i++) {
-      const dx = track.path[i].x - track.path[i-1].x;
-      const dy = track.path[i].y - track.path[i-1].y;
-      totalDistance += Math.sqrt(dx*dx + dy*dy);
-    }
-  });
-  const averageDistance = totalVisitors > 0 ? totalDistance / totalVisitors : 0;
-  
-  // Find popular areas
+  // Identify most visited areas
+  // This is a simplified approach - a real implementation would use clustering
   let popularAreas = "Not enough data";
-  if (tracks.length > 0) {
-    // This is simplified - in a real app we'd use clustering
-    if (averageDistance < 500) popularAreas = "Store Entrance";
-    else if (averageDistance < 1000) popularAreas = "Center Aisles";
-    else popularAreas = "All Store Areas";
+  
+  // Find areas with most dense paths
+  if (personTrackingData.length > 0) {
+    // Divide the store into a 3x3 grid
+    const areaGrid = Array(3).fill(0).map(() => Array(3).fill(0));
+    
+    personTrackingData.forEach(track => {
+      track.path.forEach(point => {
+        // Convert point to grid position
+        const gridX = Math.floor(point.x * 3);
+        const gridY = Math.floor(point.y * 3);
+        
+        // Ensure within bounds
+        if (gridX >= 0 && gridX < 3 && gridY >= 0 && gridY < 3) {
+          areaGrid[gridY][gridX]++;
+        }
+      });
+    });
+    
+    // Find the area with highest count
+    let maxCount = 0;
+    let maxArea = [0, 0];
+    
+    for (let y = 0; y < 3; y++) {
+      for (let x = 0; x < 3; x++) {
+        if (areaGrid[y][x] > maxCount) {
+          maxCount = areaGrid[y][x];
+          maxArea = [x, y];
+        }
+      }
+    }
+    
+    // Map grid position to store area
+    const areas = [
+      ["Top Left", "Top Center", "Top Right"],
+      ["Middle Left", "Center", "Middle Right"],
+      ["Bottom Left", "Bottom Center", "Bottom Right"]
+    ];
+    
+    popularAreas = areas[maxArea[1]][maxArea[0]];
+  }
+  
+  // Calculate peak hours (time with most activity)
+  let peakHours = "No data";
+  
+  if (personTrackingData.length > 0) {
+    // Get first and last timestamps
+    let minTime = Infinity;
+    let maxTime = 0;
+    
+    personTrackingData.forEach(track => {
+      track.path.forEach(point => {
+        minTime = Math.min(minTime, point.timestamp);
+        maxTime = Math.max(maxTime, point.timestamp);
+      });
+    });
+    
+    if (maxTime > minTime) {
+      // Calculate activity in 3 time slots
+      const timeRange = maxTime - minTime;
+      const timeSlots = [
+        { label: "Beginning", count: 0 },
+        { label: "Middle", count: 0 },
+        { label: "End", count: 0 }
+      ];
+      
+      personTrackingData.forEach(track => {
+        track.path.forEach(point => {
+          // Normalize time to 0-1 range
+          const normalizedTime = (point.timestamp - minTime) / timeRange;
+          // Determine which time slot
+          const slotIndex = Math.min(2, Math.floor(normalizedTime * 3));
+          timeSlots[slotIndex].count++;
+        });
+      });
+      
+      // Find slot with highest count
+      let maxSlot = timeSlots[0];
+      timeSlots.forEach(slot => {
+        if (slot.count > maxSlot.count) {
+          maxSlot = slot;
+        }
+      });
+      
+      peakHours = maxSlot.label;
+    }
   }
   
   return {
     totalVisitors,
     averageTimeSeconds,
-    averageDistance: Math.round(averageDistance),
-    totalDistance: Math.round(totalDistance),
-    popularAreas
+    popularAreas,
+    peakHours
   };
-}
-
-// Draw tracks on a canvas
-function drawTracks(ctx, tracks, selectedTrack = null) {
-  // Clear canvas
-  ctx.clearRect(0, 0, ctx.canvas.width, ctx.canvas.height);
-  
-  // Draw each track
-  tracks.forEach(track => {
-    const isSelected = selectedTrack && selectedTrack.id === track.id;
-    
-    // Set line style
-    ctx.strokeStyle = isSelected ? '#ff3b30' : track.active ? '#34c759' : '#8e8e93';
-    ctx.lineWidth = isSelected ? 3 : 2;
-    
-    // Draw path
-    if (track.path.length > 1) {
-      ctx.beginPath();
-      ctx.moveTo(track.path[0].x, track.path[0].y);
-      
-      for (let i = 1; i < track.path.length; i++) {
-        ctx.lineTo(track.path[i].x, track.path[i].y);
-      }
-      
-      ctx.stroke();
-    }
-    
-    // Draw current position (last point)
-    if (track.path.length > 0) {
-      const lastPoint = track.path[track.path.length - 1];
-      
-      ctx.fillStyle = isSelected ? '#ff3b30' : track.active ? '#34c759' : '#8e8e93';
-      ctx.beginPath();
-      ctx.arc(lastPoint.x, lastPoint.y, isSelected ? 6 : 4, 0, Math.PI * 2);
-      ctx.fill();
-    }
-  });
 }

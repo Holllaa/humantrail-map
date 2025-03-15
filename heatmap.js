@@ -32,8 +32,8 @@ function drawHeatmap(ctx, data, width, height, radius = 30) {
   // Draw each heat point
   data.forEach(point => {
     const gradient = ctx.createRadialGradient(
-      point.x, point.y, 0,
-      point.x, point.y, radius
+      point.x * width, point.y * height, 0,
+      point.x * width, point.y * height, radius
     );
     
     // Get color based on value
@@ -44,23 +44,23 @@ function drawHeatmap(ctx, data, width, height, radius = 30) {
     
     ctx.fillStyle = gradient;
     ctx.beginPath();
-    ctx.arc(point.x, point.y, radius, 0, Math.PI * 2);
+    ctx.arc(point.x * width, point.y * height, radius, 0, Math.PI * 2);
     ctx.fill();
   });
 }
 
 // Generate heatmap data from tracks
-function generateHeatmapFromTracks(tracks, width, height, gridSize = 20) {
+function generateHeatmapFromTracks(trackingData, width, height, gridSize = 20) {
   // Create a grid to count visits in each cell
   const gridWidth = Math.ceil(width / gridSize);
   const gridHeight = Math.ceil(height / gridSize);
   const grid = Array(gridHeight).fill(0).map(() => Array(gridWidth).fill(0));
 
   // Count visits in each grid cell
-  tracks.forEach(track => {
+  trackingData.forEach(track => {
     track.path.forEach(point => {
-      const gridX = Math.floor(point.x / gridSize);
-      const gridY = Math.floor(point.y / gridSize);
+      const gridX = Math.floor(point.x * width / gridSize);
+      const gridY = Math.floor(point.y * height / gridSize);
       
       // Ensure we're within grid bounds
       if (gridX >= 0 && gridX < gridWidth && gridY >= 0 && gridY < gridHeight) {
@@ -83,8 +83,9 @@ function generateHeatmapFromTracks(tracks, width, height, gridSize = 20) {
     for (let x = 0; x < gridWidth; x++) {
       if (grid[y][x] > 0) {
         heatmapData.push({
-          x: x * gridSize + gridSize / 2,
-          y: y * gridSize + gridSize / 2,
+          // Convert grid position back to normalized coordinates
+          x: (x * gridSize + gridSize / 2) / width,
+          y: (y * gridSize + gridSize / 2) / height,
           value: maxValue > 0 ? grid[y][x] / maxValue : 0,
         });
       }
@@ -92,4 +93,11 @@ function generateHeatmapFromTracks(tracks, width, height, gridSize = 20) {
   }
 
   return heatmapData;
+}
+
+// Generate a heatmap overlay for the floor map
+function generateFloorMapHeatmap(trackingData, floorMapMatrix) {
+  // This would use the floor map matrix to map tracking coordinates to floor map coordinates
+  // For demonstration, we'll just use the same heatmap data but mapped to the floor map canvas
+  return generateHeatmapFromTracks(trackingData, 1, 1, 0.05);
 }

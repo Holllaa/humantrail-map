@@ -36,6 +36,7 @@
         <div class="tabs">
           <button id="tracking-tab" class="tab active">Tracking View</button>
           <button id="heatmap-tab" class="tab">Heatmap View</button>
+          <button id="floor-map-tab" class="tab">Floor Map</button>
         </div>
 
         <div id="tracking-view" class="view active">
@@ -51,6 +52,17 @@
 
         <div id="heatmap-view" class="view">
           <canvas id="heatmap-canvas"></canvas>
+        </div>
+        
+        <div id="floor-map-view" class="view">
+          <div class="floor-map-container">
+            <img id="floor-map-img" src="placeholder-floor-map.jpg" alt="Store Floor Map">
+            <canvas id="floor-map-canvas"></canvas>
+          </div>
+          <div class="floor-map-controls">
+            <button id="upload-floor-map">Upload Floor Map</button>
+            <input type="file" id="floor-map-input" accept="image/*" hidden>
+          </div>
         </div>
       </div>
 
@@ -69,6 +81,16 @@
             <h3>Popular Areas</h3>
             <p id="popular-areas">No data</p>
           </div>
+          <div class="metric-card">
+            <h3>Peak Hours</h3>
+            <p id="peak-hours">No data</p>
+          </div>
+        </div>
+        <div class="detailed-analytics">
+          <h3>Movement Patterns</h3>
+          <div id="patterns-chart" class="chart-container">
+            <div class="placeholder-chart">Processing data required</div>
+          </div>
         </div>
       </div>
     </div>
@@ -78,8 +100,11 @@
     <p>Retail Analytics Dashboard | Customer Movement Tracker</p>
   </footer>
 
-  <script src="heatmap.js"></script>
+  <script src="https://cdn.jsdelivr.net/npm/@tensorflow/tfjs@3.20.0"></script>
+  <script src="https://cdn.jsdelivr.net/npm/@tensorflow-models/coco-ssd"></script>
   <script src="tracking.js"></script>
+  <script src="heatmap.js"></script>
+  <script src="floormap.js"></script>
   <script src="app.js"></script>
 </body>
 </html>

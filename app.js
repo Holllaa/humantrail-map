@@ -13,22 +13,20 @@ const playButton = document.getElementById('play-button');
 const processButton = document.getElementById('process-button');
 const trackingTab = document.getElementById('tracking-tab');
 const heatmapTab = document.getElementById('heatmap-tab');
+const floorMapTab = document.getElementById('floor-map-tab');
 const trackingView = document.getElementById('tracking-view');
 const heatmapView = document.getElementById('heatmap-view');
+const floorMapView = document.getElementById('floor-map-view');
 const totalVisitorsElement = document.getElementById('total-visitors');
 const avgTimeElement = document.getElementById('avg-time').querySelector('span');
 const popularAreasElement = document.getElementById('popular-areas');
+const peakHoursElement = document.getElementById('peak-hours');
 
 // Application state
-let tracks = [];
-let heatmapData = [];
-let isProcessing = false;
 let videoLoaded = false;
-let animationId = null;
-
-// Canvas contexts
-const trackingCtx = trackingCanvas.getContext('2d');
-const heatmapCtx = heatmapCanvas.getContext('2d');
+let isProcessing = false;
+let heatmapData = [];
+let mappedTrackingData = [];
 
 // Initialize application
 function init() {
@@ -40,6 +38,7 @@ function init() {
   processButton.addEventListener('click', processVideo);
   trackingTab.addEventListener('click', () => switchTab('tracking'));
   heatmapTab.addEventListener('click', () => switchTab('heatmap'));
+  floorMapTab.addEventListener('click', () => switchTab('floor-map'));
   
   // Initial tab setup
   switchTab('tracking');
@@ -49,6 +48,14 @@ function init() {
   storeVideo.addEventListener('play', handleVideoPlay);
   storeVideo.addEventListener('pause', handleVideoPause);
   storeVideo.addEventListener('ended', handleVideoEnded);
+  
+  // Initialize floor map
+  initFloorMap();
+  
+  // Load tracking model
+  loadTrackingModel().catch(error => {
+    console.error("Failed to load tracking model:", error);
+  });
   
   // Resize observer for canvas sizing
   const resizeObserver = new ResizeObserver(entries => {
@@ -108,8 +115,6 @@ function resizeCanvases() {
   
   const videoWidth = storeVideo.videoWidth;
   const videoHeight = storeVideo.videoHeight;
-  const containerWidth = trackingView.clientWidth;
-  const containerHeight = (containerWidth / videoWidth) * videoHeight;
   
   // Set tracking canvas size
   trackingCanvas.width = videoWidth;
@@ -154,42 +159,56 @@ function processVideo() {
   processButton.disabled = true;
   processButton.textContent = 'Processing...';
   
-  // In a real app, we would do computer vision processing here
-  // For demo purposes, generate random tracking data
+  // Reset tracking data
+  resetTracking();
+  
+  // Start tracking
+  startTracking(storeVideo, trackingCanvas);
+  
+  // Start video if not playing
+  if (storeVideo.paused) {
+    storeVideo.play();
+  }
+  
+  // Process for a short time for demo
   setTimeout(() => {
-    const videoWidth = storeVideo.videoWidth;
-    const videoHeight = storeVideo.videoHeight;
+    // Generate heatmap from tracking data
+    heatmapData = generateHeatmapFromTracks(
+      personTrackingData, 
+      trackingCanvas.width, 
+      trackingCanvas.height
+    );
     
-    // Generate demo data
-    tracks = generateDemoData(videoWidth, videoHeight, 10, 100);
+    // Draw heatmap
+    drawHeatmap(
+      heatmapCanvas.getContext('2d'), 
+      heatmapData, 
+      heatmapCanvas.width, 
+      heatmapCanvas.height
+    );
     
-    // Generate heatmap data
-    heatmapData = generateHeatmapFromTracks(tracks, videoWidth, videoHeight);
+    // Map tracking data to floor map
+    mappedTrackingData = mapTrackingToFloorMap(personTrackingData);
     
-    // Draw initial visualization
-    drawTracks(trackingCtx, tracks);
-    drawHeatmap(heatmapCtx, heatmapData, videoWidth, videoHeight);
+    // Draw on floor map
+    drawTrackingOnFloorMap(mappedTrackingData);
     
     // Update analytics
     updateAnalytics();
     
     isProcessing = false;
     processButton.textContent = 'Processed';
-    
-    // Start animation loop
-    if (animationId === null) {
-      animateTracking();
-    }
-  }, 2000);
+  }, 5000);
 }
 
 // Update analytics panel
 function updateAnalytics() {
-  const analytics = calculateAnalytics(tracks);
+  const analytics = calculateAnalytics();
   
   totalVisitorsElement.textContent = analytics.totalVisitors;
   avgTimeElement.textContent = analytics.averageTimeSeconds;
   popularAreasElement.textContent = analytics.popularAreas;
+  peakHoursElement.textContent = analytics.peakHours;
 }
 
 // Switch between tabs
@@ -197,16 +216,54 @@ function switchTab(tabName) {
   // Update tab buttons
   trackingTab.classList.toggle('active', tabName === 'tracking');
   heatmapTab.classList.toggle('active', tabName === 'heatmap');
+  floorMapTab.classList.toggle('active', tabName === 'floor-map');
   
   // Update views
   trackingView.classList.toggle('active', tabName === 'tracking');
   heatmapView.classList.toggle('active', tabName === 'heatmap');
+  floorMapView.classList.toggle('active', tabName === 'floor-map');
   
   // Redraw visualizations based on active tab
-  if (tabName === 'tracking' && tracks.length > 0) {
-    drawTracks(trackingCtx, tracks);
+  if (tabName === 'tracking' && personTrackingData.length > 0) {
+    // Handled by animation loop
   } else if (tabName === 'heatmap' && heatmapData.length > 0) {
-    drawHeatmap(heatmapCtx, heatmapData, heatmapCanvas.width, heatmapCanvas.height);
+    drawHeatmap(
+      heatmapCanvas.getContext('2d'), 
+      heatmapData, 
+      heatmapCanvas.width, 
+      heatmapCanvas.height
+    );
+  } else if (tabName === 'floor-map' && mappedTrackingData.length > 0) {
+    // Toggle between tracking and heatmap views on floor map
+    if (document.querySelector('.floor-map-controls .view-toggle')) {
+      // If toggle exists, check its state
+      const showHeatmap = document.querySelector('.floor-map-controls .view-toggle').classList.contains('heatmap-active');
+      if (showHeatmap) {
+        drawHeatmapOnFloorMap(mappedTrackingData);
+      } else {
+        drawTrackingOnFloorMap(mappedTrackingData);
+      }
+    } else {
+      // Default to tracking view
+      drawTrackingOnFloorMap(mappedTrackingData);
+      
+      // Add toggle button
+      const toggleButton = document.createElement('button');
+      toggleButton.textContent = 'Show Heatmap';
+      toggleButton.className = 'view-toggle';
+      document.querySelector('.floor-map-controls').appendChild(toggleButton);
+      
+      toggleButton.addEventListener('click', () => {
+        toggleButton.classList.toggle('heatmap-active');
+        if (toggleButton.classList.contains('heatmap-active')) {
+          toggleButton.textContent = 'Show Tracks';
+          drawHeatmapOnFloorMap(mappedTrackingData);
+        } else {
+          toggleButton.textContent = 'Show Heatmap';
+          drawTrackingOnFloorMap(mappedTrackingData);
+        }
+      });
+    }
   }
 }
 
@@ -219,16 +276,61 @@ function updateUploadZoneState(state) {
   }
 }
 
-// Animate tracking visualization
-function animateTracking() {
-  // In a real app with real-time tracking, we would update tracks here
-  // For demo, we'll just redraw without changes
-  if (tracks.length > 0) {
-    drawTracks(trackingCtx, tracks);
+// Create a placeholder floor map
+function createPlaceholderFloorMap() {
+  const canvas = document.createElement('canvas');
+  canvas.width = 800;
+  canvas.height = 600;
+  const ctx = canvas.getContext('2d');
+  
+  // Draw store layout
+  ctx.fillStyle = '#f0f0f0';
+  ctx.fillRect(0, 0, 800, 600);
+  
+  // Outer walls
+  ctx.strokeStyle = '#666';
+  ctx.lineWidth = 4;
+  ctx.strokeRect(50, 50, 700, 500);
+  
+  // Entrance
+  ctx.fillStyle = '#1a73e8';
+  ctx.fillRect(390, 550, 20, 4);
+  ctx.fillStyle = '#666';
+  ctx.font = '14px Arial';
+  ctx.fillText('Entrance', 370, 580);
+  
+  // Shelves and display areas
+  ctx.fillStyle = '#ccc';
+  
+  // Left shelves
+  for (let i = 0; i < 3; i++) {
+    ctx.fillRect(100, 100 + i * 120, 150, 50);
   }
   
-  animationId = requestAnimationFrame(animateTracking);
+  // Right shelves
+  for (let i = 0; i < 3; i++) {
+    ctx.fillRect(550, 100 + i * 120, 150, 50);
+  }
+  
+  // Center display
+  ctx.fillRect(325, 200, 150, 150);
+  
+  // Checkout area
+  ctx.fillStyle = '#b3e5fc';
+  ctx.fillRect(100, 480, 200, 40);
+  ctx.fillStyle = '#666';
+  ctx.fillText('Checkout', 170, 505);
+  
+  return canvas.toDataURL('image/jpeg');
 }
 
 // Initialize the app when DOM is loaded
-document.addEventListener('DOMContentLoaded', init);
+document.addEventListener('DOMContentLoaded', function() {
+  // Create placeholder floor map
+  const placeholderSrc = createPlaceholderFloorMap();
+  const floorMapImg = document.getElementById('floor-map-img');
+  floorMapImg.src = placeholderSrc;
+  
+  // Initialize app
+  init();
+});
