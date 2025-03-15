@@ -30,6 +30,21 @@
             <input type="file" id="video-input" accept="video/*" hidden>
           </label>
         </div>
+        
+        <h2 class="mt-4">Store Floor Plan</h2>
+        <div id="floor-plan-upload" class="upload-zone">
+          <label for="floor-plan-input">
+            <div class="upload-content">
+              <svg width="50" height="50" viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2">
+                <path d="M21 3H3v18h18V3z"/>
+                <path d="M3 9h18"/>
+                <path d="M9 21V9"/>
+              </svg>
+              <p>Upload store floor plan image</p>
+            </div>
+            <input type="file" id="floor-plan-input" accept="image/*" hidden>
+          </label>
+        </div>
       </div>
 
       <div class="view-section">
@@ -61,6 +76,8 @@
           </div>
           <div class="floor-map-controls">
             <button id="upload-floor-map">Upload Floor Map</button>
+            <button id="toggle-heatmap" class="ml-2">Toggle Heatmap</button>
+            <button id="auto-detect-areas" class="ml-2">Auto-Detect Areas</button>
             <input type="file" id="floor-map-input" accept="image/*" hidden>
           </div>
         </div>
@@ -91,6 +108,12 @@
           <div id="patterns-chart" class="chart-container">
             <div class="placeholder-chart">Processing data required</div>
           </div>
+          <div class="mt-4">
+            <h3>Floor Plan Insights</h3>
+            <div id="floor-insights" class="insights-container">
+              <div class="placeholder-insights">Upload floor plan and process video for insights</div>
+            </div>
+          </div>
         </div>
       </div>
     </div>
@@ -99,6 +122,13 @@
   <footer>
     <p>Retail Analytics Dashboard | Customer Movement Tracker</p>
   </footer>
+
+  <div id="loading-model" class="loading-model">
+    <p>Loading tracking model...</p>
+    <div class="loading-bar">
+      <div class="loading-progress"></div>
+    </div>
+  </div>
 
   <script src="https://cdn.jsdelivr.net/npm/@tensorflow/tfjs@3.20.0"></script>
   <script src="https://cdn.jsdelivr.net/npm/@tensorflow-models/coco-ssd"></script>

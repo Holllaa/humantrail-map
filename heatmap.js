@@ -96,8 +96,169 @@ function generateHeatmapFromTracks(trackingData, width, height, gridSize = 20) {
 }
 
 // Generate a heatmap overlay for the floor map
-function generateFloorMapHeatmap(trackingData, floorMapMatrix) {
-  // This would use the floor map matrix to map tracking coordinates to floor map coordinates
-  // For demonstration, we'll just use the same heatmap data but mapped to the floor map canvas
-  return generateHeatmapFromTracks(trackingData, 1, 1, 0.05);
+function generateFloorMapHeatmap(trackingData, floorMapMatrix, floorMapWidth, floorMapHeight) {
+  if (!trackingData || !trackingData.length || !floorMapMatrix) {
+    return [];
+  }
+  
+  // Create a grid for the floor map with the same dimensions as the matrix
+  const gridWidth = floorMapMatrix[0].length;
+  const gridHeight = floorMapMatrix.length;
+  const grid = Array(gridHeight).fill(0).map(() => Array(gridWidth).fill(0));
+  
+  // Map tracking coordinates to floor map grid coordinates
+  trackingData.forEach(track => {
+    track.path.forEach(point => {
+      // Convert normalized tracking coordinates to floor map grid coordinates
+      const gridX = Math.floor(point.x * gridWidth);
+      const gridY = Math.floor(point.y * gridHeight);
+      
+      // Ensure we're within bounds and only count visits in walkable areas
+      if (gridX >= 0 && gridX < gridWidth && gridY >= 0 && gridY < gridHeight) {
+        if (floorMapMatrix[gridY][gridX] === 1) { // Only count walkable areas
+          grid[gridY][gridX]++;
+        }
+      }
+    });
+  });
+  
+  // Find max visit count for normalization
+  let maxCount = 0;
+  for (let y = 0; y < gridHeight; y++) {
+    for (let x = 0; x < gridWidth; x++) {
+      maxCount = Math.max(maxCount, grid[y][x]);
+    }
+  }
+  
+  // Convert grid to heatmap data format
+  const heatmapData = [];
+  for (let y = 0; y < gridHeight; y++) {
+    for (let x = 0; x < gridWidth; x++) {
+      if (grid[y][x] > 0) {
+        heatmapData.push({
+          x: (x + 0.5) / gridWidth,  // Center of the grid cell, normalized
+          y: (y + 0.5) / gridHeight, // Center of the grid cell, normalized
+          value: maxCount > 0 ? grid[y][x] / maxCount : 0
+        });
+      }
+    }
+  }
+  
+  return heatmapData;
+}
+
+// Render heatmap with transparency on a floor plan image
+function renderFloorMapHeatmap(ctx, heatmapData, width, height, radius = 20) {
+  // Use drawHeatmap with floor map specific settings
+  drawHeatmap(ctx, heatmapData, width, height, radius);
+  
+  // Optionally, we can add overlay blend mode for better visibility
+  ctx.globalCompositeOperation = 'multiply';
+}
+
+// Convert tracking data to a format that can be used with the floor map
+function convertTrackingDataToFloorMap(trackingData, floorMapMatrix) {
+  if (!trackingData || !trackingData.length || !floorMapMatrix) {
+    return [];
+  }
+  
+  const gridWidth = floorMapMatrix[0].length;
+  const gridHeight = floorMapMatrix.length;
+  
+  // Create a deep copy of tracking data and map to floor map coordinates
+  const mappedData = JSON.parse(JSON.stringify(trackingData));
+  
+  mappedData.forEach(track => {
+    track.floorMapPath = track.path.map(point => {
+      // Convert normalized video coordinates to floor map grid
+      const gridX = Math.floor(point.x * gridWidth);
+      const gridY = Math.floor(point.y * gridHeight);
+      
+      // Ensure coordinates are within bounds
+      const boundedX = Math.max(0, Math.min(gridWidth - 1, gridX));
+      const boundedY = Math.max(0, Math.min(gridHeight - 1, gridY));
+      
+      // Check if this position is walkable
+      const isWalkable = floorMapMatrix[boundedY] && 
+                         floorMapMatrix[boundedY][boundedX] === 1;
+      
+      // Return mapped point with additional walkable flag
+      return {
+        x: boundedX / gridWidth,
+        y: boundedY / gridHeight,
+        timestamp: point.timestamp,
+        walkable: isWalkable
+      };
+    });
+  });
+  
+  return mappedData;
+}
+
+// Automatically generate a floor map matrix from an image
+// This uses simple brightness-based analysis - in a real app, you'd use ML
+function generateFloorMapMatrixFromImage(image, resolution = 20) {
+  // Create a canvas to analyze the image
+  const canvas = document.createElement('canvas');
+  const ctx = canvas.getContext('2d');
+  
+  // Set canvas size
+  canvas.width = image.naturalWidth || image.width;
+  canvas.height = image.naturalHeight || image.height;
+  
+  // Draw image to canvas
+  ctx.drawImage(image, 0, 0, canvas.width, canvas.height);
+  
+  // Get image data
+  const imageData = ctx.getImageData(0, 0, canvas.width, canvas.height);
+  const data = imageData.data;
+  
+  // Create matrix with specified resolution
+  const matrix = [];
+  const cellWidth = canvas.width / resolution;
+  const cellHeight = canvas.height / resolution;
+  
+  // For each cell in the matrix
+  for (let y = 0; y < resolution; y++) {
+    const row = [];
+    for (let x = 0; x < resolution; x++) {
+      // Calculate the average brightness of this cell
+      let totalBrightness = 0;
+      let samples = 0;
+      
+      // Define cell boundaries
+      const startX = Math.floor(x * cellWidth);
+      const endX = Math.floor((x + 1) * cellWidth);
+      const startY = Math.floor(y * cellHeight);
+      const endY = Math.floor((y + 1) * cellHeight);
+      
+      // Sample pixels within the cell
+      for (let py = startY; py < endY; py += 2) {
+        for (let px = startX; px < endX; px += 2) {
+          // Get pixel index (RGBA, 4 bytes per pixel)
+          const i = (py * canvas.width + px) * 4;
+          
+          // Calculate brightness (average of RGB)
+          const r = data[i];
+          const g = data[i + 1];
+          const b = data[i + 2];
+          const brightness = (r + g + b) / 3;
+          
+          totalBrightness += brightness;
+          samples++;
+        }
+      }
+      
+      // Determine if cell is walkable based on brightness
+      // Brighter areas are typically floors, darker areas are walls/shelves
+      const avgBrightness = samples > 0 ? totalBrightness / samples : 0;
+      
+      // Using a threshold to determine walkable areas
+      // 1 = walkable, 0 = obstacle
+      row.push(avgBrightness > 120 ? 1 : 0);
+    }
+    matrix.push(row);
+  }
+  
+  return matrix;
 }
