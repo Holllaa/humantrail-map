@@ -1,164 +1,214 @@
 
-import { useCallback, useEffect, useRef, useState } from 'react';
-import { useAnalytics, PathPoint, PersonTrack } from '@/context/AnalyticsContext';
-import { generateHeatmapFromTracks } from '@/utils/tracking';
+import { useState, useEffect, useRef } from 'react';
 
-interface UseTrackingOptions {
-  onModelLoaded?: () => void;
-  onError?: (error: Error) => void;
+// Define the types for our tracking data
+export type PathPoint = {
+  x: number;
+  y: number;
+  timestamp: number;
+};
+
+export type PersonTrack = {
+  id: string;
+  path: PathPoint[];
+  active: boolean;
+};
+
+interface DetectedPerson {
+  bbox: [number, number, number, number]; // [x, y, width, height]
+  class: string;
+  score: number;
 }
 
-const useTracking = (options?: UseTrackingOptions) => {
-  const { 
-    tracks, 
-    setTracks, 
-    addTrackPoint, 
-    setHeatmapData, 
-    videoSrc, 
-    isProcessing, 
-    setIsProcessing, 
-    setProcessingProgress 
-  } = useAnalytics();
-  
-  const [currentFrame, setCurrentFrame] = useState<ImageData | null>(null);
-  const frameRef = useRef<HTMLCanvasElement | null>(null);
-  const canvasRef = useRef<HTMLCanvasElement | null>(null);
+// Custom hook for tracking people in video
+export const useTracking = () => {
+  const [isModelLoaded, setIsModelLoaded] = useState(false);
+  const [isProcessing, setIsProcessing] = useState(false);
+  const [personTracks, setPersonTracks] = useState<PersonTrack[]>([]);
+  const [detectedPersons, setDetectedPersons] = useState<DetectedPerson[]>([]);
+  const trackingModelRef = useRef<any>(null);
   const videoRef = useRef<HTMLVideoElement | null>(null);
-  const requestIdRef = useRef<number | null>(null);
-  
-  // Initialize tracking
-  const initTracking = useCallback(async (videoElement: HTMLVideoElement) => {
-    if (!videoElement) return;
-    
-    videoRef.current = videoElement;
-    setIsProcessing(true);
-    setProcessingProgress(0);
-    
-    // Reset tracks
-    setTracks([]);
-    
-    // Setup canvas for frame processing
-    if (!frameRef.current) {
-      const canvas = document.createElement('canvas');
-      canvas.width = videoElement.videoWidth;
-      canvas.height = videoElement.videoHeight;
-      frameRef.current = canvas;
-    }
-    
-    // Start processing video frames
-    processFrame();
-    
-    // Simulate model loading
-    setTimeout(() => {
-      options?.onModelLoaded?.();
-    }, 1500);
-    
-    setIsProcessing(false);
-  }, [setIsProcessing, setProcessingProgress, setTracks, options]);
-  
-  // Process individual video frame
-  const processFrame = useCallback(() => {
-    if (!videoRef.current || !frameRef.current) return;
-    
-    const video = videoRef.current;
-    const canvas = frameRef.current;
-    const ctx = canvas.getContext('2d');
-    
-    if (!ctx) return;
-    
-    // Draw the current video frame to canvas
-    ctx.drawImage(video, 0, 0, canvas.width, canvas.height);
-    
-    // Get image data for processing
-    const imageData = ctx.getImageData(0, 0, canvas.width, canvas.height);
-    setCurrentFrame(imageData);
-    
-    // Mock detection and tracking
-    mockDetectAndTrack(imageData);
-    
-    // Continue processing frames
-    requestIdRef.current = requestAnimationFrame(processFrame);
-  }, []);
-  
-  // Mock detection and tracking (to be replaced with real ML model)
-  const mockDetectAndTrack = useCallback((imageData: ImageData) => {
-    // Create random movement patterns for demonstration
-    const timestamp = Date.now();
-    const width = imageData.width;
-    const height = imageData.height;
-    
-    // Update existing tracks with new positions
-    setTracks((prevTracks: PersonTrack[]) => {
-      const updatedTracks = prevTracks.map(track => {
-        const lastPoint = track.path[track.path.length - 1];
-        
-        // Generate next point with some randomness but following a pattern
-        const nextX = Math.max(0, Math.min(width, lastPoint.x + (Math.random() - 0.5) * 20));
-        const nextY = Math.max(0, Math.min(height, lastPoint.y + (Math.random() - 0.5) * 20));
-        
-        // Add new point to path
-        const newPoint: PathPoint = {
-          x: nextX,
-          y: nextY,
-          timestamp
-        };
-        
-        return {
-          ...track,
-          path: [...track.path, newPoint]
-        };
-      });
-      
-      return updatedTracks;
-    });
-    
-    // Occasionally add new tracks
-    if (Math.random() < 0.01 && tracks.length < 10) {
-      const newTrackId = `person_${Date.now()}`;
-      const startX = Math.random() * width;
-      const startY = Math.random() * height;
-      
-      addTrackPoint(newTrackId, {
-        x: startX,
-        y: startY,
-        timestamp
-      });
-    }
-    
-    // Generate heatmap data from tracks
-    const heatmapData = generateHeatmapFromTracks(tracks, width, height);
-    setHeatmapData(heatmapData);
-  }, [tracks, addTrackPoint, setHeatmapData, setTracks]);
-  
-  // Start processing method for external components
-  const startProcessing = useCallback(() => {
-    if (!videoRef.current) {
-      console.error("Video element not initialized");
-      options?.onError?.(new Error("Video element not initialized"));
-      return;
-    }
-    
-    setIsProcessing(true);
-    videoRef.current.play();
-    processFrame();
-  }, [processFrame, setIsProcessing, options]);
-  
-  // Cleanup
+  const animationRef = useRef<number | null>(null);
+  const lastDetectionTimeRef = useRef<number>(0);
+  const trackingIntervalRef = useRef<NodeJS.Timeout | null>(null);
+
+  // Load the tracking model on component mount
   useEffect(() => {
+    const loadModel = async () => {
+      try {
+        // Mock model loading for demonstration
+        // In a real implementation, you would load the actual model
+        // const model = await cocoSsd.load();
+        // trackingModelRef.current = model;
+        
+        // Simulate model loading time
+        await new Promise(resolve => setTimeout(resolve, 2000));
+        trackingModelRef.current = { detect: mockDetect };
+        
+        setIsModelLoaded(true);
+      } catch (error) {
+        console.error('Failed to load tracking model:', error);
+      }
+    };
+
+    loadModel();
+
     return () => {
-      if (requestIdRef.current) {
-        cancelAnimationFrame(requestIdRef.current);
+      if (animationRef.current) {
+        cancelAnimationFrame(animationRef.current);
+      }
+      if (trackingIntervalRef.current) {
+        clearInterval(trackingIntervalRef.current);
       }
     };
   }, []);
-  
+
+  // Mock detect function for demonstration
+  const mockDetect = async (video: HTMLVideoElement): Promise<DetectedPerson[]> => {
+    // Simulate detection delay
+    await new Promise(resolve => setTimeout(resolve, 100));
+    
+    // Generate 1-3 random people detections
+    const numPeople = Math.floor(Math.random() * 3) + 1;
+    const detections: DetectedPerson[] = [];
+    
+    for (let i = 0; i < numPeople; i++) {
+      const x = Math.random() * (video.videoWidth - 100);
+      const y = Math.random() * (video.videoHeight - 200);
+      
+      detections.push({
+        bbox: [x, y, 50 + Math.random() * 30, 100 + Math.random() * 50],
+        class: 'person',
+        score: 0.7 + Math.random() * 0.3
+      });
+    }
+    
+    return detections;
+  };
+
+  // Start tracking people
+  const startTracking = (video: HTMLVideoElement) => {
+    if (!isModelLoaded || !trackingModelRef.current) return;
+    
+    videoRef.current = video;
+    setIsProcessing(true);
+    lastDetectionTimeRef.current = Date.now();
+    
+    // Run detection at regular intervals
+    trackingIntervalRef.current = setInterval(() => {
+      detectPeople();
+    }, 500);
+  };
+
+  // Detect people in the current video frame
+  const detectPeople = async () => {
+    if (!videoRef.current || !trackingModelRef.current) return;
+    
+    try {
+      const detections = await trackingModelRef.current.detect(videoRef.current);
+      const persons = detections.filter(detection => 
+        detection.class === 'person' && detection.score > 0.7
+      );
+      
+      setDetectedPersons(persons);
+      updatePersonTracks(persons);
+    } catch (error) {
+      console.error('Error detecting people:', error);
+    }
+  };
+
+  // Update person tracks based on new detections
+  const updatePersonTracks = (persons: DetectedPerson[]) => {
+    const currentTime = Date.now();
+    
+    setPersonTracks(prevTracks => {
+      // Updated version to ensure we return the correct type
+      const updatedTracks: PersonTrack[] = [...prevTracks];
+      
+      // Mark existing tracks as inactive initially
+      updatedTracks.forEach(track => {
+        track.active = false;
+      });
+      
+      // Update tracks with new detections
+      persons.forEach(person => {
+        const [x, y, width, height] = person.bbox;
+        const centerX = x + width / 2;
+        const centerY = y + height / 2;
+        
+        // Find closest existing track
+        let closestTrack: PersonTrack | null = null;
+        let minDistance = 100; // Threshold for considering it's the same person
+        
+        updatedTracks.forEach(track => {
+          if (track.path.length > 0) {
+            const lastPoint = track.path[track.path.length - 1];
+            const distance = Math.sqrt(
+              Math.pow(centerX - lastPoint.x, 2) + 
+              Math.pow(centerY - lastPoint.y, 2)
+            );
+            
+            if (distance < minDistance) {
+              minDistance = distance;
+              closestTrack = track;
+            }
+          }
+        });
+        
+        if (closestTrack) {
+          // Update existing track
+          closestTrack.path.push({
+            x: centerX,
+            y: centerY,
+            timestamp: currentTime
+          });
+          closestTrack.active = true;
+        } else {
+          // Create new track
+          const newTrack: PersonTrack = {
+            id: `person-${Date.now()}-${Math.floor(Math.random() * 1000)}`,
+            path: [{
+              x: centerX,
+              y: centerY,
+              timestamp: currentTime
+            }],
+            active: true
+          };
+          updatedTracks.push(newTrack);
+        }
+      });
+      
+      // Prune inactive tracks older than 5 seconds
+      const cutoffTime = currentTime - 5000;
+      return updatedTracks.filter(track => 
+        track.active || 
+        (track.path.length > 0 && track.path[track.path.length - 1].timestamp > cutoffTime)
+      );
+    });
+  };
+
+  // Stop tracking
+  const stopTracking = () => {
+    if (trackingIntervalRef.current) {
+      clearInterval(trackingIntervalRef.current);
+      trackingIntervalRef.current = null;
+    }
+    setIsProcessing(false);
+  };
+
+  // Reset tracking data
+  const resetTracking = () => {
+    setPersonTracks([]);
+    setDetectedPersons([]);
+  };
+
   return {
-    currentFrame,
-    initTracking,
-    videoRef,
-    canvasRef,
-    startProcessing
+    isModelLoaded,
+    isProcessing,
+    personTracks,
+    detectedPersons,
+    startTracking,
+    stopTracking,
+    resetTracking
   };
 };
-
-export default useTracking;
