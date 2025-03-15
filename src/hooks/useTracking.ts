@@ -126,10 +126,8 @@ const useTracking = (options?: UseTrackingOptions) => {
     }
     
     // Generate heatmap data from tracks
-    if (tracks.length > 0) {
-      const heatmapData = generateHeatmapFromTracks(tracks, width, height);
-      setHeatmapData(heatmapData);
-    }
+    const heatmapData = generateHeatmapFromTracks(tracks, width, height);
+    setHeatmapData(heatmapData);
   }, [tracks, addTrackPoint, setHeatmapData, setTracks]);
   
   // Start processing method for external components
