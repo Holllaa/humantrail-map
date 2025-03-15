@@ -1,18 +1,85 @@
+
 <!DOCTYPE html>
 <html lang="en">
-  <head>
-    <meta charset="UTF-8" />
-    <meta name="viewport" content="width=device-width, initial-scale=1.0" />
-    <title>humantrail-map</title>
-    <meta name="description" content="Lovable Generated Project" />
-    <meta name="author" content="Lovable" />
-    <meta property="og:image" content="/og-image.png" />
-  </head>
+<head>
+  <meta charset="UTF-8">
+  <meta name="viewport" content="width=device-width, initial-scale=1.0">
+  <title>Retail Analytics - Customer Movement Tracker</title>
+  <link rel="stylesheet" href="styles.css">
+</head>
+<body>
+  <header>
+    <h1>Retail Analytics Dashboard</h1>
+    <p>Track customer movement patterns to optimize store layout</p>
+  </header>
 
-  <body>
-    <div id="root"></div>
-    <!-- IMPORTANT: DO NOT REMOVE THIS SCRIPT TAG OR THIS VERY COMMENT! -->
-    <script src="https://cdn.gpteng.co/gptengineer.js" type="module"></script>
-    <script type="module" src="/src/main.tsx"></script>
-  </body>
+  <main>
+    <div class="dashboard">
+      <div class="upload-section">
+        <h2>Upload Store Video</h2>
+        <div id="upload-zone" class="upload-zone">
+          <label for="video-input">
+            <div class="upload-content">
+              <svg width="50" height="50" viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2">
+                <path d="M21 15v4a2 2 0 0 1-2 2H5a2 2 0 0 1-2-2v-4"></path>
+                <polyline points="17 8 12 3 7 8"></polyline>
+                <line x1="12" y1="3" x2="12" y2="15"></line>
+              </svg>
+              <p>Drag & drop video or click to browse</p>
+            </div>
+            <input type="file" id="video-input" accept="video/*" hidden>
+          </label>
+        </div>
+      </div>
+
+      <div class="view-section">
+        <div class="tabs">
+          <button id="tracking-tab" class="tab active">Tracking View</button>
+          <button id="heatmap-tab" class="tab">Heatmap View</button>
+        </div>
+
+        <div id="tracking-view" class="view active">
+          <div class="video-container">
+            <video id="store-video" playsinline muted></video>
+            <canvas id="tracking-canvas"></canvas>
+          </div>
+          <div class="controls">
+            <button id="play-button">Play</button>
+            <button id="process-button" disabled>Process Video</button>
+          </div>
+        </div>
+
+        <div id="heatmap-view" class="view">
+          <canvas id="heatmap-canvas"></canvas>
+        </div>
+      </div>
+
+      <div class="analytics-panel">
+        <h2>Analytics Overview</h2>
+        <div class="metrics">
+          <div class="metric-card">
+            <h3>Total Visitors</h3>
+            <p id="total-visitors">0</p>
+          </div>
+          <div class="metric-card">
+            <h3>Avg. Time Spent</h3>
+            <p id="avg-time"><span>0</span> seconds</p>
+          </div>
+          <div class="metric-card">
+            <h3>Popular Areas</h3>
+            <p id="popular-areas">No data</p>
+          </div>
+        </div>
+      </div>
+    </div>
+  </main>
+
+  <footer>
+    <p>Retail Analytics Dashboard | Customer Movement Tracker</p>
+  </footer>
+
+  <script src="heatmap.js"></script>
+  <script src="tracking.js"></script>
+  <script src="app.js"></script>
+</body>
 </html>
