@@ -1,5 +1,5 @@
 
-import React, { useState } from 'react';
+import React from 'react';
 import { Tabs, TabsContent, TabsList, TabsTrigger } from '@/components/ui/tabs';
 import { AnalyticsProvider } from '@/context/AnalyticsContext';
 import Header from './Header';
@@ -7,7 +7,6 @@ import VideoProcessor from './VideoProcessor';
 import TrackingView from './TrackingView';
 import HeatmapView from './HeatmapView';
 import AnalyticsPanel from './AnalyticsPanel';
-import StoreLayout from './StoreLayout';
 import TrackingModel from './TrackingModel';
 
 const Dashboard: React.FC = () => {
@@ -18,16 +17,13 @@ const Dashboard: React.FC = () => {
         
         <main className="max-w-7xl mx-auto px-4 py-8 sm:px-6 lg:px-8 space-y-8">
           <div className="grid grid-cols-1 lg:grid-cols-3 gap-8">
-            {/* Left Column - Video and Controls */}
+            {/* Left Column - Video */}
             <div className="lg:col-span-2 space-y-6">
               <h2 className="text-2xl font-medium tracking-tight">Video Processing</h2>
               <VideoProcessor />
-              
-              <h2 className="text-2xl font-medium tracking-tight">Store Layout</h2>
-              <StoreLayout />
             </div>
             
-            {/* Right Column - Model and Analytics */}
+            {/* Right Column - Analytics */}
             <div className="space-y-6">
               <h2 className="text-2xl font-medium tracking-tight">Analytics</h2>
               <AnalyticsPanel />
