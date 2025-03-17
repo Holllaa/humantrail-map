@@ -1,3 +1,4 @@
+
 import React, { useEffect, useRef, useState } from 'react';
 import { useAnalytics } from '@/context/AnalyticsContext';
 import { useTracking } from '@/hooks/useTracking';
@@ -13,6 +14,7 @@ const VideoProcessor: React.FC = () => {
   const fileInputRef = useRef<HTMLInputElement>(null);
   const [videoFile, setVideoFile] = useState<File | null>(null);
   const [processing, setProcessing] = useState(false);
+  const [progress, setProgress] = useState(0);
 
   // Load video when file is selected
   useEffect(() => {
@@ -101,17 +103,19 @@ const VideoProcessor: React.FC = () => {
 
     setIsProcessing(true);
     setProcessing(true);
+    setProgress(0);
     setProcessingProgress(0);
     resetTracking();
     toast.loading('Starting video processing...', { id: 'processing' });
 
     // Simulate processing progress
-    let progress = 0;
+    let currentProgress = 0;
     const interval = setInterval(() => {
-      progress += 10;
-      setProcessingProgress(progress);
+      currentProgress += 10;
+      setProgress(currentProgress);
+      setProcessingProgress(currentProgress);
 
-      if (progress >= 100) {
+      if (currentProgress >= 100) {
         clearInterval(interval);
         setIsProcessing(false);
         setProcessing(false);
@@ -179,7 +183,7 @@ const VideoProcessor: React.FC = () => {
           </div>
           <div className="flex justify-between text-sm text-gray-500">
             <span>{videoFile.name}</span>
-            <span>{videoFile.size} KB</span>
+            <span>{Math.round(videoFile.size / 1024)} KB</span>
           </div>
         </div>
       )}
@@ -215,7 +219,7 @@ const VideoProcessor: React.FC = () => {
       {/* Progress Bar */}
       {processing && (
         <div className="w-full">
-          <Progress value={setProcessingProgress} />
+          <Progress value={progress} />
         </div>
       )}
     </div>
