@@ -27,7 +27,6 @@ const Dashboard: React.FC = () => {
             <div className="space-y-6">
               <h2 className="text-2xl font-medium tracking-tight">Analytics</h2>
               <AnalyticsPanel />
-              
               <TrackingModel />
             </div>
           </div>
