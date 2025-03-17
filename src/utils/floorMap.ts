@@ -4,11 +4,26 @@
  */
 
 import { drawHeatmap } from './heatmap';
+import { PathPoint, PersonTrack } from '@/context/AnalyticsContext';
 
 export interface FloorMapMatrix {
   grid: number[][];
   width: number;
   height: number;
+}
+
+export interface FloorMapInsights {
+  highTrafficAreas: {
+    center: { x: number, y: number };
+    traffic: number;
+    cells: Array<{ x: number, y: number }>;
+  }[];
+  bottlenecks: {
+    position: { x: number, y: number };
+    traffic: number;
+    obstacleCount: number;
+  }[];
+  suggestions: string[];
 }
 
 // Create a default floor map matrix
@@ -125,7 +140,7 @@ export function generateFloorMapMatrixFromImage(image: HTMLImageElement, resolut
 }
 
 // Generate insights based on tracking data and floor map
-export function generateFloorMapInsights(tracks: any[], floorMapMatrix: FloorMapMatrix) {
+export function generateFloorMapInsights(tracks: PersonTrack[], floorMapMatrix: FloorMapMatrix): FloorMapInsights {
   if (!tracks || tracks.length === 0 || !floorMapMatrix) {
     return {
       highTrafficAreas: [],
@@ -142,9 +157,13 @@ export function generateFloorMapInsights(tracks: any[], floorMapMatrix: FloorMap
     "Monitor traffic patterns over time to identify changes"
   ];
   
+  // This would contain more advanced analysis in a real implementation
+  const highTrafficAreas = [];
+  const bottlenecks = [];
+  
   return {
-    highTrafficAreas: [], // Would be populated with actual data in a full implementation
-    bottlenecks: [],      // Would be populated with actual data in a full implementation
+    highTrafficAreas,
+    bottlenecks,
     suggestions
   };
 }
@@ -166,4 +185,43 @@ export function overlayHeatmapOnFloorPlan(
   ctx.globalCompositeOperation = 'multiply';
   drawHeatmap(ctx, heatmapData, width, height);
   ctx.globalCompositeOperation = 'source-over';
+}
+
+// Map tracking data points to floor map coordinates
+export function mapTrackingToFloorMap(
+  trackingData: PersonTrack[],
+  floorMapMatrix: FloorMapMatrix
+): PersonTrack[] {
+  if (!floorMapMatrix || !trackingData.length) return [];
+  
+  // Create a deep copy of tracking data
+  const mappedData = JSON.parse(JSON.stringify(trackingData));
+  
+  // Grid dimensions
+  const gridWidth = floorMapMatrix.width;
+  const gridHeight = floorMapMatrix.height;
+  
+  // Map each track's path to floor map coordinates
+  mappedData.forEach((track: PersonTrack) => {
+    const mappedPath: PathPoint[] = track.path.map(point => {
+      // Convert normalized video coordinates to floor map grid
+      const gridX = Math.floor(point.x / gridWidth);
+      const gridY = Math.floor(point.y / gridHeight);
+      
+      // Ensure coordinates are within bounds
+      const boundedX = Math.max(0, Math.min(gridWidth - 1, gridX));
+      const boundedY = Math.max(0, Math.min(gridHeight - 1, gridY));
+      
+      // Return mapped point
+      return {
+        x: (boundedX * gridWidth) + (gridWidth / 2),
+        y: (boundedY * gridHeight) + (gridHeight / 2),
+        timestamp: point.timestamp
+      };
+    });
+    
+    track.path = mappedPath;
+  });
+  
+  return mappedData;
 }

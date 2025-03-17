@@ -8,6 +8,7 @@ import TrackingView from './TrackingView';
 import HeatmapView from './HeatmapView';
 import AnalyticsPanel from './AnalyticsPanel';
 import TrackingModel from './TrackingModel';
+import FloorMapView from './FloorMapView';
 
 const Dashboard: React.FC = () => {
   return (
@@ -35,9 +36,10 @@ const Dashboard: React.FC = () => {
           <div className="space-y-4">
             <h2 className="text-2xl font-medium tracking-tight">Visualization</h2>
             <Tabs defaultValue="tracks" className="w-full">
-              <TabsList className="grid w-full max-w-md grid-cols-2">
+              <TabsList className="grid w-full max-w-md grid-cols-3">
                 <TabsTrigger value="tracks">Path Tracking</TabsTrigger>
                 <TabsTrigger value="heatmap">Heatmap</TabsTrigger>
+                <TabsTrigger value="floormap">Floor Analysis</TabsTrigger>
               </TabsList>
               <TabsContent value="tracks" className="mt-4">
                 <div className="aspect-video w-full bg-white dark:bg-gray-800 rounded-xl overflow-hidden shadow-subtle border border-gray-100 dark:border-gray-700">
@@ -47,6 +49,11 @@ const Dashboard: React.FC = () => {
               <TabsContent value="heatmap" className="mt-4">
                 <div className="aspect-video w-full bg-white dark:bg-gray-800 rounded-xl overflow-hidden shadow-subtle border border-gray-100 dark:border-gray-700">
                   <HeatmapView />
+                </div>
+              </TabsContent>
+              <TabsContent value="floormap" className="mt-4">
+                <div className="aspect-video w-full bg-white dark:bg-gray-800 rounded-xl overflow-hidden shadow-subtle border border-gray-100 dark:border-gray-700">
+                  <FloorMapView />
                 </div>
               </TabsContent>
             </Tabs>
