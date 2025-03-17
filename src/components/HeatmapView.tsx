@@ -2,16 +2,53 @@
 import React, { useEffect, useRef, useState } from 'react';
 import { useAnalytics } from '@/context/AnalyticsContext';
 import { drawHeatmap, overlayHeatmapOnFloorPlan } from '@/utils/heatmap';
+import { 
+  createDefaultFloorMapMatrix, 
+  drawFloorMapMatrix, 
+  generateFloorMapMatrixFromImage,
+  FloorMapMatrix,
+  generateFloorMapInsights
+} from '@/utils/floorMap';
 
 const HeatmapView: React.FC = () => {
-  const { heatmapData, storeLayout } = useAnalytics();
+  const { heatmapData, storeLayout, tracks } = useAnalytics();
   const canvasRef = useRef<HTMLCanvasElement>(null);
   const containerRef = useRef<HTMLDivElement>(null);
   const [floorPlanDetected, setFloorPlanDetected] = useState(false);
+  const [floorMapMatrix, setFloorMapMatrix] = useState<FloorMapMatrix | null>(null);
+  
+  // Initialize floor map matrix when component mounts
+  useEffect(() => {
+    setFloorMapMatrix(createDefaultFloorMapMatrix());
+  }, []);
+  
+  // Process floor plan image when it changes
+  useEffect(() => {
+    if (!storeLayout.imageUrl) return;
+    
+    const image = new Image();
+    image.onload = () => {
+      try {
+        // Generate floor map matrix from the image
+        const matrix = generateFloorMapMatrixFromImage(image);
+        setFloorMapMatrix(matrix);
+        setFloorPlanDetected(true);
+      } catch (error) {
+        console.error('Error generating floor map matrix:', error);
+        // Fallback to default matrix
+        setFloorMapMatrix(createDefaultFloorMapMatrix());
+      }
+    };
+    image.onerror = () => {
+      console.error('Error loading floor plan image');
+      setFloorMapMatrix(createDefaultFloorMapMatrix());
+    };
+    image.src = storeLayout.imageUrl;
+  }, [storeLayout.imageUrl]);
   
   // Draw the heatmap whenever data or layout changes
   useEffect(() => {
-    if (!canvasRef.current) return;
+    if (!canvasRef.current || !floorMapMatrix) return;
     
     const canvas = canvasRef.current;
     const ctx = canvas.getContext('2d');
@@ -22,15 +59,21 @@ const HeatmapView: React.FC = () => {
     canvas.width = storeLayout.width;
     canvas.height = storeLayout.height;
     
+    // Clear canvas
+    ctx.clearRect(0, 0, canvas.width, canvas.height);
+    
+    // Draw the floor map matrix
+    drawFloorMapMatrix(ctx, floorMapMatrix, canvas.width, canvas.height);
+    
     // Check if we have a floor plan image
     if (storeLayout.imageUrl) {
-      setFloorPlanDetected(true);
-      
       // Load the floor plan image
       const floorPlanImg = new Image();
       floorPlanImg.onload = () => {
         // Draw the floor plan image
+        ctx.globalAlpha = 0.7; // Make floor plan semi-transparent
         ctx.drawImage(floorPlanImg, 0, 0, canvas.width, canvas.height);
+        ctx.globalAlpha = 1.0;
         
         // Overlay the heatmap if we have data
         if (heatmapData.length > 0) {
@@ -42,17 +85,21 @@ const HeatmapView: React.FC = () => {
       };
       floorPlanImg.src = storeLayout.imageUrl;
     } else {
-      setFloorPlanDetected(false);
-      
-      // Just draw the heatmap on a blank canvas
+      // Just draw the heatmap on a blank canvas with the matrix
       if (heatmapData.length > 0) {
         drawHeatmap(ctx, heatmapData, storeLayout.width, storeLayout.height);
-      } else {
-        // Clear canvas if no data
-        ctx.clearRect(0, 0, canvas.width, canvas.height);
       }
     }
-  }, [heatmapData, storeLayout]);
+  }, [heatmapData, storeLayout, floorMapMatrix]);
+  
+  // Generate insights when data changes
+  useEffect(() => {
+    if (!floorMapMatrix || !tracks || tracks.length === 0) return;
+    
+    const insights = generateFloorMapInsights(tracks, floorMapMatrix);
+    console.log('Floor map insights:', insights);
+    // You can use these insights to display recommendations to the user
+  }, [floorMapMatrix, tracks]);
   
   return (
     <div 
